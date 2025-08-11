@@ -37,17 +37,6 @@ class crawler:
                 yield path
 
     def add_url_to_visit(self,url):
-
-        """f=((url not in self.visited_urls) and (url not in self.urls_to_visit)
-           and (self.allowed_domain in url) and not("auth.fandom.com" in url)
-           and ("Special:" not in url) and ("?action:" not in url)
-           and ("User:" not in url) and ("Message_Wall" not in url) and
-           ("Blog:" not in url)  and ("User_blog" not in url)
-           and ("/f/" not in url) and ("Talk:" not in url)
-           and ("/Forum:" not in url) and ("Template:" not in url) and ("Category_talk" not in url)
-           and ("MediaWiki" not in url) and ("Forum" not in url) and ("Greatbeegee_Wiki:" not in url)
-           and ("Greatbeegee_Wiki_talk" not in url))"""
-        """bool(self.pattern.match(url)) and"""
         if (url not in self.visited_urls) and (url not in self.urls_to_visit):
             self.urls_to_visit.append(url)
 
@@ -122,4 +111,5 @@ if __name__=="__main__":
     list=os.listdir(path)
     for i in list:
         if not("edited_" in i or not(".html" in i)):
+
             os.remove(path+i)
