@@ -58,21 +58,3 @@ def HTML_Download(list,path):
                     htmlfile.write(soup.prettify())
         except Exception as e:
                 logging.info(e)
-
-
-    """  
-        if ("File:" not in url):
-            try:
-                response=urllib.request.urlopen(url)
-                page = url.split("/")[-1]
-                if "png" in page:
-                    filename = f"beegee-{page}.png"
-                else:
-                    filename=f"beegee-{page}.jpeg"
-                r=response.read()
-                soup=bs4.BeautifulSoup(r)
-                table=soup.find("a", attrs={"class":"see-full-size-link"})
-                Path(filename).write_bytes(response.read())
-            except Exception as e:
-                print(e)
-"""
