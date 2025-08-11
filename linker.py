@@ -63,4 +63,3 @@ class linker:
 
 
 
-linker("C:\\Backups\\Implimentation\\","greatbeegee.fandom.com").link()
