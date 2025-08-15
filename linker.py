@@ -23,13 +23,14 @@ class linker:
             if (z['href'] not in self.phplist) and z not in self.css_downloads:
                 try:
                     css = requests.get("https://" + self.domain + "/" + z['href'])
-                    self.csslist.append(f"css_{len(self.css_downloads)}.css")
+                    css_count=len(self.css_downloads)
+                    self.csslist.append(f"css_{css_count}.css")
                     self.phplist.append(z["href"])
                     self.css_downloads.append(z)
-                    with open(f"{self.path}css_{len(self.css_downloads)}.css", "w", encoding="utf-8") as cfp:
+                    with open(f"{self.path}css_{css_count}.css", "w", encoding="utf-8") as cfp:
                         cfp.write(css.text)
 
-                    z["href"] = f"css_{len(self.css_downloads)}.css"
+                    z["href"] = f"css_{css_count}.css"
                 except Exception as e:
                     logging.info(e)
             else:
