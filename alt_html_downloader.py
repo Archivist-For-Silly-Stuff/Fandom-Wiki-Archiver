@@ -20,7 +20,7 @@ def image_downloader(image,path):
             file = f"{path}{image.get('data-image-key')}"
             with open(file, "wb") as imagefile:
                 imagefile.write(img.content)
-            imglist+=img_url
+            imglist.append(img_url)
 
 
 def HTML_Download(list,path):
