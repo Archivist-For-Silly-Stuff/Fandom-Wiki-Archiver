@@ -7,7 +7,6 @@ import requests
 logging.basicConfig(
     format='%(asctime)s %(levelname)s:%(message)s',
     level=logging.INFO)
-imglist = []
 
 
 
@@ -27,22 +26,26 @@ def image_downloader(image,path):
 
 
 def HTML_Download(list,path):
+    global imglist
+    imglist=[i for i in os.listdir(path) if not(".html" in i)]
+    filelist=[i for i in os.listdir(path) if (".html" in i)]
     for url in list:
-        try:
-            url = url.strip()
-            if not url.startswith(("https://", "http://")):
-                continue
-            name = url.split("/")[-1]
-            files=os.listdir(path)
-            html = requests.get(url).text
-            soup = BeautifulSoup(html, "html.parser")
-            if (name+".html" in files):
-                continue
-            elif (name+".html" not in files):
-                logging.info(f"Downloading {url}")
-                for image in soup.find_all("img"):
-                    image_downloader(image,path)
-                with open(f"{path}{name}.html","w",encoding="utf-8") as htmlfile:
-                    htmlfile.write(soup.prettify())
-        except Exception as e:
-                logging.info(e)
+        if url not in filelist:
+            try:
+                url = url.strip()
+                if not(url.startswith(("https://", "http://"))) or ('Local_Sitemap' in url):
+                    continue
+                name = url.split("/")[-1]
+                files=os.listdir(path)
+                if (name+".html" in files):
+                    continue
+                elif (name+".html" not in files):
+                    html = requests.get(url).text
+                    soup = BeautifulSoup(html, "html.parser")
+                    logging.info(f"Downloading {url}")
+                    for image in soup.find_all("img"):
+                        image_downloader(image,path)
+                    with open(f"{path}{name}.html","w",encoding="utf-8") as htmlfile:
+                        htmlfile.write(soup.prettify())
+            except Exception as e:
+                    logging.info(e)

@@ -108,7 +108,6 @@ class mainwindow(QMainWindow):
     def submit(self):
         url=str(self.url.text())
         path=str(self.path.text())
-        print(url)
         patternscrap = re.compile(
             rf"^https:\/\/[a-zA-Z0-9]+\.fandom\.com\/wiki\/(?:"
             r"[A-Za-z0-9_()%\-]+"
@@ -127,13 +126,14 @@ class mainwindow(QMainWindow):
                 path+="\\"
 
             f=crawl.crawler(url.split('/')[2],path,[url])
-            f.run()
-            l=linker.linker(path,url.split('/')[2])
+            f.download()
+            self.flag=True
+            """l=linker.linker(path,url.split('/')[2])
             l.link()
             ls = os.listdir(path)
             for i in ls:
                 if not ("edited_" in i or not (".html" in i)):
-                    os.remove(path + i)
+                    os.remove(path + i)"""
 
         elif not(f1) and self.flag:
             self.errorpath.exec_()
