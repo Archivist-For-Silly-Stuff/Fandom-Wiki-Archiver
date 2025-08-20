@@ -3,9 +3,15 @@ from bs4 import BeautifulSoup
 import requests
 import logging
 
+import GUI
+
 logging.basicConfig(
     format='%(asctime)s %(levelname)s:%(message)s',
     level=logging.INFO)
+
+#from GUI import sidewindow
+
+
 class linker:
     #Takes the path where all the html is saved and domain of the url
     def __init__(self,path,domain):
@@ -16,6 +22,7 @@ class linker:
         self.phplist=[]
         self.scriptlist=[]
         self.jslist=[]
+        #self.side=GUI.sidewindow()
     #Downloads and links css
     def css(self,soup):
         b = soup.find_all("link", rel=lambda value: value and "stylesheet" in value)
@@ -32,7 +39,10 @@ class linker:
 
                     z["href"] = f"css_{css_count}.css"
                 except Exception as e:
+
                     logging.info(e)
+                    #self.side.login(e)
+
             else:
                 z["href"]=self.csslist[self.phplist.index(z["href"])]
         with open(f"{self.path}css.txt","w") as f:
@@ -46,6 +56,7 @@ class linker:
                 img["src"] = img["data-image-key"]
             except Exception as e:
                 logging.info(f"{e}")
+                #self.side.login(e)
         return soup
     #Removes js tracking scripts and  any suspicious iframes
     def remove_trackers(self,soup):
@@ -56,6 +67,7 @@ class linker:
                     script.decompose()
             except Exception as e:
                 logging.info(e)
+                #self.side.login(e)
         return soup
 
 
@@ -63,9 +75,12 @@ class linker:
     def link(self):
         #Helps continue from where you left off
         list=os.listdir(self.path)
+        print(list)
         valid_list=[el for el in list if ".html" in el and not(el.startswith("edited_")) and ("edited_"+el not in list)]
+        print(valid_list)
         for x in valid_list:
             logging.info(f"Linking {x}")
+            #self.side.login(f"Linking {x}")
             with open(self.path+x,"r",encoding="utf-8") as fp:
                 soup=BeautifulSoup(fp,"html.parser")
                 soup=self.css(soup)
