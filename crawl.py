@@ -101,10 +101,42 @@ class crawler:
         alt_html_downloader.HTML_Download(self.visited_urls, path=self.path)
 
     def download(self):
-        self.patternscrap=re.compile(r"$https:\/\/[a-zA-Z0-9]+\.fandom\.com\/wiki\/Local_Sitemap?namefrom=[a-zA-Z0-9]"
-
-
+        self.sitemap=re.compile(r"^https:\/\/[a-zA-Z0-9]+\.fandom\.com\/wiki\/Local_Sitemap(?:\?namefrom=[a-zA-Z0-9_()%\-]+|)$",re.IGNORECASE
         )
+        self.patternscrap = re.compile(
+            rf"^https:\/\/{self.allowed_domain}\/wiki\/"
+            r"[A-Za-z0-9_()%\-]+$",
+            re.IGNORECASE
+        )
+        f1=self.sitemap.match(self.urls_to_visit[0])
+        if f1:
+            sitemaplist=[]
+            while self.urls_to_visit:
+                self.url = self.urls_to_visit.pop(0).strip()
+                sitemaplist.append(self.url)
+                html=requests.get(self.url)
+                soup=BeautifulSoup(html.text,"html.parser")
+                print(self.allowed_domain)
+                a=soup.find_all('a')
+                all_urls=[href['href'] for href in a if href.has_attr('href')]
+                for url in all_urls:
+                    newurl=urljoin(self.url,url)
+                    print(newurl)
+                    if (newurl not in sitemaplist) and not(bool(self.sitemap.match(newurl))) and bool(self.patternscrap.match(newurl)):
+                        self.visited_urls.append(newurl)
+                    elif (newurl not in sitemaplist) and bool(self.sitemap.match(newurl)):
+                        self.urls_to_visit.append(newurl)
+
+            print(self.urls_to_visit)
+            print(self.visited_urls)
+            alt_html_downloader.HTML_Download(self.visited_urls,path=self.path)
+            y=linker.linker(path=self.path,domain=self.url.split('/')[2])
+            y.link()
+            ls=os.listdir(self.path)
+
+
+
+
 
 
 if __name__ == "__main__":
