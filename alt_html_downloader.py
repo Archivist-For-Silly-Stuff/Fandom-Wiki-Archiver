@@ -2,11 +2,14 @@ import os
 from bs4 import BeautifulSoup
 import logging
 import requests
+#from GUI import sidewindow
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)s:%(message)s',
     level=logging.INFO)
 imglist = []
+
+
 
 def image_downloader(image,path):
     global imglist

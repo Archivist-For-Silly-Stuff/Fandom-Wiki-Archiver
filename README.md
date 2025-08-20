@@ -24,7 +24,7 @@ If you wish to use this there are also some prerequisite things you must downloa
 ## A todo list
 So far I still need to:
 <ul>
-  <li>make a GUI</li>
+  <li>make a GUI (wip)</li>
   <li>a .exe executable file</li>
   <li>Test the graphing feature</li>
   <li>Extend this to other Fan Wikis</li>
