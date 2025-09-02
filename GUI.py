@@ -1,30 +1,23 @@
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QMessageBox)
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QMessageBox, QFileDialog, QDialog)
 import sys
 import crawl
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
+from PyQt5.uic import loadUi
+from PyQt5 import QtWidgets
 import re
 import linker
 import os
 
 
 
-"""class sidewindow(QMainWindow):
+class mainwindow(QMainWindow, QDialog):
     def __init__(self):
-        super().__init__()
-        self.side = QMainWindow()
-        self.side.setGeometry(1600, 500, 100, 200)
-        self.log = QLabel("", self)
-        self.log.setGeometry(0, 0, 100, 100)
-        self.log.setAlignment(Qt.AlignCenter)
-
-    def login(self, log):
-        self.log.setText(log)"""
-
-class mainwindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
+        QMainWindow.__init__(self)
+        super(mainwindow,self).__init__()
         #sets title
+
+
         self.setWindowTitle("Archiver")
         self.setGeometry(1000,500,600,600)
 
@@ -103,20 +96,22 @@ class mainwindow(QMainWindow):
         self.errorpath.setWindowTitle('Path error')
 
         self.errorurl.setText("Invalid URL")
-        self.errorurl.setInformativeText("The URL you've specified doesn't exist!")
+        self.errorurl.setInformativeText("Enter a Local Sitemap url!")
         self.errorurl.setWindowTitle('Path error')
     def submit(self):
         url=str(self.url.text())
         path=str(self.path.text())
         patternscrap = re.compile(
-            rf"^https:\/\/[a-zA-Z0-9]+\.fandom\.com\/wiki\/(?:"
-            r"[A-Za-z0-9_()%\-]+"
-            r"|Category:[A-Za-z0-9_()%\-]+"
-            r")$",
+            r"^https:\/\/"
+            r"[a-zA-Z0-9]+\.fandom\.com\/"
+            r"wiki\/Local_Sitemap"
+            r"(?:\?namefrom=[^#]+"
+            r"|)$",
             re.IGNORECASE
         )
+        breakpoint()
         f1=os.path.isdir(path)
-        f2=patternscrap.match(url)
+        f2=bool(patternscrap.match(url))
         if (not(url or path) and self.flag):
             self.error.exec_()
         elif self.flag and f1 and f2:
@@ -125,7 +120,7 @@ class mainwindow(QMainWindow):
             if path[-1]!="\\":
                 path+="\\"
 
-            f=crawl.crawler(url.split('/')[2],path,[url])
+            f=crawl.crawler(url.split('/')[2], path,[url])
             f.download()
             self.flag=True
             """l=linker.linker(path,url.split('/')[2])
