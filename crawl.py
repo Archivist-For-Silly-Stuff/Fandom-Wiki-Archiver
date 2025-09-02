@@ -2,6 +2,7 @@ import logging
 # Allows us to delete any copies of html
 import os
 # Helps to join source url's with reference url's
+import os.path
 from urllib.parse import urljoin
 # For downloading files
 import requests
@@ -9,8 +10,9 @@ import requests
 import re
 # Parsing the HTML
 from bs4 import BeautifulSoup
+import faulthandler
 
-import GUI
+faulthandler.enable()
 # Linking the css, images to the HTML along with deleting any and all trackers
 import linker
 # Downloading the images
@@ -23,8 +25,8 @@ logging.basicConfig(
 import sys
 # Graphs
 import networkx
-
-
+import csv
+import time
 
 
 class crawler:
@@ -34,7 +36,6 @@ class crawler:
         self.visited_urls = []
         self.urls_to_visit = urls
         self.allowed_domain = allowed_domain
-        self.count_css = 0
         self.network = network
         self.path = path
 
@@ -101,38 +102,53 @@ class crawler:
         alt_html_downloader.HTML_Download(self.visited_urls, path=self.path)
 
     def download(self):
-        self.sitemap=re.compile(r"^https:\/\/[a-zA-Z0-9]+\.fandom\.com\/wiki\/Local_Sitemap(?:\?namefrom=[a-zA-Z0-9_()%\-]+|)$",re.IGNORECASE
-        )
+        breakpoint()
         self.patternscrap = re.compile(
             rf"^https:\/\/{self.allowed_domain}\/wiki\/"
-            r"[A-Za-z0-9_()%\-]+$",
+            r"[^:]+$",
             re.IGNORECASE
         )
-        f1=self.sitemap.match(self.urls_to_visit[0])
-        if f1:
-            sitemaplist=[]
-            while self.urls_to_visit:
-                self.url = self.urls_to_visit.pop(0).strip()
-                sitemaplist.append(self.url)
-                html=requests.get(self.url)
-                soup=BeautifulSoup(html.text,"html.parser")
-                print(self.allowed_domain)
-                a=soup.find_all('a')
-                all_urls=[href['href'] for href in a if href.has_attr('href')]
-                for url in all_urls:
-                    newurl=urljoin(self.url,url)
-                    print(newurl)
-                    if (newurl not in sitemaplist) and not(bool(self.sitemap.match(newurl))) and bool(self.patternscrap.match(newurl)):
-                        self.visited_urls.append(newurl)
-                    elif (newurl not in sitemaplist) and bool(self.sitemap.match(newurl)):
-                        self.urls_to_visit.append(newurl)
+        if not(os.path.isfile(self.path+"url.csv")):
+            if "Local_Sitemap" in self.urls_to_visit[0]:
+                sitemaplist=[]
+                while self.urls_to_visit:
+                    self.url = self.urls_to_visit.pop(0).strip()
+                    sitemaplist.append(self.url)
+                    html=requests.get(self.url)
+                    soup=BeautifulSoup(html.text,"html.parser")
+                    a=soup.find_all('a')
+                    sitemap=re.compile(rf"^https:\/\/{self.allowed_domain}/wiki/Local_Sitemap(?:\?namefrom=[a-zA-Z0-9%/\-_/\\+()]+|)$",
+                                       re.IGNORECASE)
+                    for i in a:
+                        if i.has_attr('href'):
+                            href=i.get('href')
+                            link=urljoin(rf"https://{self.allowed_domain}/wiki/",href)
+                            if bool(sitemap.match(link)) and (link not in self.urls_to_visit) and (link not in sitemaplist):
+                                self.urls_to_visit+=[link]
+                                sitemaplist.append(self.url)
+                            elif bool(self.patternscrap.match(link)) and ("Local_Sitemap" not in link):
+                                self.visited_urls+=[link]
+                breakpoint()
+                if not(os.path.isfile(self.path+"url.csv")):
+                    with open(self.path+"url.csv","w") as fp:
+                        writer=csv.DictWriter(fp,fieldnames=['URL','Linked'])
+                        writer.writeheader()
+                        self.visited_urls=list(set(self.visited_urls))
+                        for i in self.visited_urls:
+                            writer.writerow({'URL':i,'Linked':False})
+        elif os.path.isfile(self.path+"url.csv"):
+            fp = open(self.path + "url.csv", "r", encoding='utf-8')
+            Reader=csv.DictReader(fp)
+            for row in Reader:
+                self.visited_urls.append(row['URL'])
+            fp.close()
+        alt_html_downloader.HTML_Download(self.visited_urls,path=self.path)
+        time.sleep(5)
+        breakpoint()
+        print(self.visited_urls)
 
-            print(self.urls_to_visit)
-            print(self.visited_urls)
-            alt_html_downloader.HTML_Download(self.visited_urls,path=self.path)
-            y=linker.linker(path=self.path,domain=self.url.split('/')[2])
-            y.link()
-            ls=os.listdir(self.path)
+        linking=linker.linker(path=self.path,domain=self.visited_urls[0].split('/')[2])
+        linking.link()
 
 
 
