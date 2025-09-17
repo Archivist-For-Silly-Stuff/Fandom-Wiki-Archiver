@@ -1,15 +1,13 @@
 import os
 import re
 from csv import DictReader, DictWriter
-from idlelib.iomenu import encoding
-from urllib.parse import urljoin
 
+from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
 from bs4 import BeautifulSoup
 import requests
 import logging
-import pandas
 import csv
-
+import progress
 logging.basicConfig(
     format='%(asctime)s %(levelname)s:%(message)s',
     level=logging.INFO)
@@ -17,9 +15,14 @@ logging.basicConfig(
 #from GUI import sidewindow
 
 
-class linker:
+class linker(QObject):
+    log=pyqtSignal(str)
+    prog=pyqtSignal(int)
+    finished=pyqtSignal()
     #Takes the path where all the html is saved and domain of the url
-    def __init__(self,path,domain):
+    def __init__(self,path,domain,parent=None):
+        QObject.__init__(self,parent)
+        self.linkbar = None
         self.path=path
         self.domain=domain
         self.csslist=[]
@@ -60,6 +63,7 @@ class linker:
             with open(self.path+"js.csv","w",encoding='utf-8') as fp:
                 reader=csv.DictWriter(fp,fieldnames=self.jsheaders)
                 reader.writeheader()
+
 
     #Downloads and links css
     def css(self,soup):
@@ -110,6 +114,10 @@ class linker:
                     logging.info(f"{e}")
                 #self.side.login(e)
         return soup
+
+    def check(self,html):
+        return re.search(r"(googletag|quantserve|scorecard|beacon|metrics|silversurfer|search-insight)",html)
+
     #Removes js tracking scripts and  any suspicious iframes
     def remove_trackers(self,soup):
         c=[script for script in soup.find_all("script")]+[script for script in soup.find_all("iframe")]
@@ -119,12 +127,14 @@ class linker:
                     script.decompose()
                 elif script.has_attr('src'):
                     if (script['src'] not in self.jssrc):
-                        breakpoint()
-                        js=requests.get("https://"+self.domain+script['src'])
+                        if ("https://" not in script['src']):
+                            js=requests.get("https://"+self.domain+script['src'])
+                        else:
+                            js=requests.get(script['src'])
                         jscount=len(self.jssrc)
                         self.jssrc.append(script['src'])
+                        self.log.emit(f"Downloading {script['src']}")
                         self.jscounter.append(f"js_{jscount}.js")
-                        url=urljoin(f"https://{self.domain}",)
                         jsfile = open(self.path + "js.csv", "a", encoding="utf-8")
                         writer = DictWriter(jsfile, fieldnames=self.jsheaders)
                         writer.writerow({'jscounter': f"js_{jscount}.js", 'jssrc': script['src']})
@@ -140,7 +150,7 @@ class linker:
         return soup
 
 
-
+    @pyqtSlot()
     def link(self):
         #Helps continue from where you left off
         list=os.listdir(self.path)
@@ -149,11 +159,12 @@ class linker:
         for row in self.linkedlist:
             if row['Linked']=="False":
                 valid_list.append(row['URL'])
+        self.i=1
         if valid_list:
-            breakpoint()
+            self.linkbar = progress.progress(len(valid_list),"linker")
             for x in valid_list:
-                logging.info(f"Linking {x.split('/')[-1]}")
-                #self.side.login(f"Linking {x}")
+                self.log.emit(f"Linking {x.split('/')[-1]}")
+                self.prog.emit(self.i)
                 name=x.split('/')[-1]+".html"
                 with open(self.path+name,"r",encoding="utf-8") as fp:
                     soup=BeautifulSoup(fp,"html.parser")
@@ -170,3 +181,5 @@ class linker:
                             break
                     update.writeheader()
                     update.writerows(self.linkedlist)
+                self.i+=1
+            self.linkbar.close()
