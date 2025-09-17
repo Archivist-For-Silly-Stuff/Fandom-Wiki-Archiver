@@ -22,7 +22,7 @@ If you wish to use this there are also some prerequisite things you must downloa
 </ul>
 
 ## Instructions
-To use this I would suggest running the GUI, the CLI command probably also works, but the GUI is more user friendly.
+To use this I would suggest running the GUI, the CLI command probably also works, but the GUI is more user-friendly.
 
 To archive a wiki first you must go to any wiki page (except for a forum page). Now, navigate down to the footer of the page.
 
@@ -30,7 +30,7 @@ There you will see many links. I want you to click on the link that says Local S
 
 Copy this url and this will be the URL you will give into the Archiver GUI.
 
-From there you **should** make a directory specifically for this wiki. Make sure it's empty and that there is absolutely NOTHING else there. Otherwise the process may be hindered.
+From there you **should** make a directory specifically for this wiki. Make sure it's empty and that there is absolutely NOTHING else there. Otherwise, the process may be hindered.
 
 Copy the path of this directory and give it to the GUI.
 
@@ -45,4 +45,5 @@ So far I still need to:
   <li>Extend this to other Fan Wikis</li>
   <li>Download Weegeepedia</li>
   <li>Make this work for dynamic html (Javascript and such)</li>
+  <li>Convert some processes from synchronous to asynchronous</li>>
 </ul>

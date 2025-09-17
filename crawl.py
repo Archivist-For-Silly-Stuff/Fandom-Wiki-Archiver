@@ -3,11 +3,14 @@ import logging
 import os
 # Helps to join source url's with reference url's
 import os.path
+from time import sleep
 from urllib.parse import urljoin
 # For downloading files
 import requests
 # Regex pattern creation
 import re
+
+from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
 # Parsing the HTML
 from bs4 import BeautifulSoup
 import faulthandler
@@ -17,6 +20,8 @@ faulthandler.enable()
 import linker
 # Downloading the images
 import alt_html_downloader
+#The progressbar
+import progress
 
 # Configure logging
 logging.basicConfig(
@@ -29,10 +34,16 @@ import csv
 import time
 
 
-class crawler:
+class crawler(QObject):
+    log=pyqtSignal(str)
+    prog=pyqtSignal(int)
+    sendurl=pyqtSignal(list)
+    finish=pyqtSignal()
+
     # Keeps a count of url's visited, downloaded and what domains are allowed. Besides the path to be saved too.
     # It also checks if you wanna make a graph
-    def __init__(self, allowed_domain, path, urls=[], network=False):
+    def __init__(self, allowed_domain, path, urls=[], network=False, parent=None):
+        QObject.__init__(self,parent)
         self.visited_urls = []
         self.urls_to_visit = urls
         self.allowed_domain = allowed_domain
@@ -102,17 +113,19 @@ class crawler:
         alt_html_downloader.HTML_Download(self.visited_urls, path=self.path)
 
     def download(self):
-        breakpoint()
+        #breakpoint()
         self.patternscrap = re.compile(
             rf"^https:\/\/{self.allowed_domain}\/wiki\/"
             r"[^:]+$",
             re.IGNORECASE
         )
         if not(os.path.isfile(self.path+"url.csv")):
+            collect = progress.progress(1, "Collector")
             if "Local_Sitemap" in self.urls_to_visit[0]:
                 sitemaplist=[]
                 while self.urls_to_visit:
                     self.url = self.urls_to_visit.pop(0).strip()
+                    self.log.emit(f"Collecting links from:{self.url}")
                     sitemaplist.append(self.url)
                     html=requests.get(self.url)
                     soup=BeautifulSoup(html.text,"html.parser")
@@ -128,7 +141,66 @@ class crawler:
                                 sitemaplist.append(self.url)
                             elif bool(self.patternscrap.match(link)) and ("Local_Sitemap" not in link):
                                 self.visited_urls+=[link]
-                breakpoint()
+                    sleep(5)
+
+                if not(os.path.isfile(self.path+"url.csv")):
+                    with open(self.path+"url.csv","w") as fp:
+                        writer=csv.DictWriter(fp,fieldnames=['URL','Linked'])
+                        writer.writeheader()
+                        self.visited_urls=list(set(self.visited_urls))
+                        for i in self.visited_urls:
+                            writer.writerow({'URL':i,'Linked':False})
+                collect.setprogress(1)
+                collect.close()
+        elif os.path.isfile(self.path+"url.csv"):
+            fp = open(self.path + "url.csv", "r", encoding='utf-8')
+            Reader=csv.DictReader(fp)
+            for row in Reader:
+                self.visited_urls.append(row['URL'])
+            fp.close()
+
+        alt_html_downloader.HTML_Download(self.visited_urls,path=self.path)
+        time.sleep(5)
+        #breakpoint()
+        print(self.visited_urls)
+
+        linking=linker.linker(path=self.path,domain=self.visited_urls[0].split('/')[2])
+        linking.link()
+
+    @pyqtSlot()
+    def downloadbar(self):
+        self.patternscrap = re.compile(
+            rf"^https:\/\/{self.allowed_domain}\/wiki\/"
+            r"[^:]+$",
+            re.IGNORECASE
+        )
+        self.prog.emit(1)
+
+        if not(os.path.isfile(self.path+"url.csv")):
+            if "Local_Sitemap" in self.urls_to_visit[0]:
+                sitemaplist=[]
+                while self.urls_to_visit:
+                    self.url = self.urls_to_visit.pop(0).strip()
+                    self.log.emit(f"Collecting links from:{self.url}")
+                    sitemaplist.append(self.url)
+                    html=requests.get(self.url)
+                    soup=BeautifulSoup(html.text,"html.parser")
+                    a=soup.find_all('a')
+                    sitemap=re.compile(rf"^https:\/\/{self.allowed_domain}/wiki/Local_Sitemap(?:\?namefrom=[a-zA-Z0-9%/\-_/\\+()]+|)$",
+                                       re.IGNORECASE)
+                    for i in a:
+                        if i.has_attr('href'):
+                            href=i.get('href')
+                            link=urljoin(rf"https://{self.allowed_domain}/wiki/",href)
+                            if bool(sitemap.match(link)) and (link not in self.urls_to_visit) and (link not in sitemaplist):
+                                self.urls_to_visit+=[link]
+                                sitemaplist.append(self.url)
+                            elif bool(self.patternscrap.match(link)) and ("Local_Sitemap" not in link):
+                                self.visited_urls+=[link]
+                    self.prog.emit(2)
+                    sleep(5)
+
+
                 if not(os.path.isfile(self.path+"url.csv")):
                     with open(self.path+"url.csv","w") as fp:
                         writer=csv.DictWriter(fp,fieldnames=['URL','Linked'])
@@ -142,13 +214,9 @@ class crawler:
             for row in Reader:
                 self.visited_urls.append(row['URL'])
             fp.close()
-        alt_html_downloader.HTML_Download(self.visited_urls,path=self.path)
-        time.sleep(5)
-        breakpoint()
-        print(self.visited_urls)
-
-        linking=linker.linker(path=self.path,domain=self.visited_urls[0].split('/')[2])
-        linking.link()
+            self.prog.emit(2)
+        self.sendurl.emit(self.visited_urls)
+        self.finish.emit()
 
 
 
