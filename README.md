@@ -39,11 +39,12 @@ Now, run the GUI. Don't worry if it freezes up. Depending on the size of the wik
 ## A todo list
 So far I still need to:
 <ul>
-  <li>make a GUI (wip)</li>
+  <li><s>make a GUI (wip)</s> Done (WOOHOOO)</li> 
   <li>a .exe executable file</li>
   <li>Test the graphing feature</li>
   <li>Extend this to other Fan Wikis</li>
   <li>Download Weegeepedia</li>
   <li>Make this work for dynamic html (Javascript and such)</li>
-  <li>Convert some processes from synchronous to asynchronous</li>>
+  <li>Convert some processes from synchronous to asynchronous</li>
+  <li>Download videos too</li>
 </ul>
