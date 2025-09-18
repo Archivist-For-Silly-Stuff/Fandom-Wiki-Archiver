@@ -3,7 +3,7 @@ An archiver for Fandom wikis!
 
 Note:This is still being worked on and supported.  
 
-As of now, robots.txt ***isn't considered*** so use this tool with care.
+<s>As of now, robots.txt ***isn't considered*** so use this tool with care.</s> Robots.txt has been taken into consideration. The wiki archiver WON'T Download or scrape any special pages or user pages. This includes files that have gone unused. 
 
 Instructions to use:
 
@@ -21,8 +21,13 @@ If you wish to use this there are also some prerequisite things you must downloa
   <li><a href="https://www.python.org/downloads/">Python 3 (For the CLI (Command Line Interface) to work)</a></li>
 </ul>
 
+## Installation
+For now there is no formal release so it is highly recommended to simply:
+Download the zip from the code option on the top left, and run the program called gui.py using:
+```python GUI.py```
+
 ## Instructions
-To use this I would suggest running the GUI, the CLI command probably also works, but the GUI is more user-friendly.
+To use this I would suggest running the GUI, the CLI command probably also works, but the GUI is more user-friendly. Simply 
 
 To archive a wiki first you must go to any wiki page (except for a forum page). Now, navigate down to the footer of the page.
 
