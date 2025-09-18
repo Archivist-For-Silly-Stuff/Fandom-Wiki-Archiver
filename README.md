@@ -34,7 +34,7 @@ From there you **should** make a directory specifically for this wiki. Make sure
 
 Copy the path of this directory and give it to the GUI.
 
-Now, run the GUI. Don't worry if it freezes up. Depending on the size of the wiki I approximate that this can last between 15 minutes to 1 hour (taking a scope of 200 pages to a 1000).
+Now, run the GUI. Don't worry if it freezes up. Depending on the size of the wiki I approximate that this can last between 5 minutes to 1 hour (taking a scope of 200 pages to a 1000).
 
 ## A todo list
 So far I still need to:
