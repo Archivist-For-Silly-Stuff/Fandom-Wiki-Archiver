@@ -39,7 +39,7 @@ class crawler(QObject):
     prog=pyqtSignal(int)
     sendurl=pyqtSignal(list)
     finish=pyqtSignal()
-
+    pause=pyqtSignal(int)
     # Keeps a count of url's visited, downloaded and what domains are allowed. Besides the path to be saved too.
     # It also checks if you wanna make a graph
     def __init__(self, allowed_domain, path, urls=[], network=False, parent=None):
@@ -49,6 +49,9 @@ class crawler(QObject):
         self.allowed_domain = allowed_domain
         self.network = network
         self.path = path
+
+    def pausing(self):
+        self.pause.emit(1)
 
     # Uses requests to get the url
     def download_url(self, url):
