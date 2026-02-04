@@ -3,7 +3,7 @@ import logging
 import os
 # Helps to join source url's with reference url's
 import os.path
-import time
+import cloudscraper
 from time import sleep
 from urllib.parse import urljoin
 # For downloading files
@@ -16,7 +16,6 @@ from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QMutex, QWaitCondition
 from bs4 import BeautifulSoup
 import faulthandler
 
-from requests import session
 from soupsieve import SoupSieve
 
 
@@ -42,8 +41,17 @@ class crawler(QObject):
     # It also checks if you wanna make a graph
     def __init__(self, allowed_domain, path, urls=[], parent=None):
         QObject.__init__(self,parent)
-        self.session=requests.session()
-        #self.session.headers.update({"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"})
+        print("p")
+        breakpoint()
+        self.session = cloudscraper.create_scraper(interpreter='nodejs',
+                                                   delay=2,
+                                                   debug=True,
+                                                   browser={
+                                                       'browser': 'firefox',
+                                                       'platform': 'windows',
+                                                       'mobile': False
+                                                   })
+        print("p")
         self.visited_urls = []
         self.urls_to_visit = urls
         self.allowed_domain = allowed_domain
@@ -112,8 +120,10 @@ class crawler(QObject):
             sitemaplist.append(self.url)
             html = self.session.get(self.url)
             soup = BeautifulSoup(html.text, "html.parser")
-            a = soup.find_all('a', {"href": re.compile(r"^\/wiki\/(?!((Special:)|(Category:)|(User_blog:))).*$")})
+            print(soup.prettify())
+            a = soup.find_all('a', {"href": re.compile(r"^\/wiki\/(?!((Special:)|(Category:)|(User_blog:)|(File:))).*$")})
             # Uses URL join to connect with the main path
+            print(a)
             self.listourl = list(map(self.urls, a))
             self.urls_to_visit = self.urls_to_visit + list(filter(
                 lambda x: (bool(self.sitemap.match(x)) and (x not in self.urls_to_visit) and (x not in sitemaplist)),
@@ -123,7 +133,7 @@ class crawler(QObject):
                 filter(lambda x: ((x not in sitemaplist) and (x not in self.visited_urls)), self.listourl))
 
         self.prog.emit(2)
-        sleep(5)
+        sleep(3)
 
         with open(self.path + "url.csv", "w") as fp:
             # self.visited_urls=list(set(self.visited_urls))
