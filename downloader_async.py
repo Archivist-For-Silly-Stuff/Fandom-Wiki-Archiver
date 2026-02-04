@@ -3,7 +3,7 @@ import re
 from yarl import URL
 import time
 from urllib.parse import urljoin
-
+from curl_cffi.requests import AsyncSession
 from PyQt5.QtCore import QObject, pyqtSlot, pyqtSignal
 from bs4 import BeautifulSoup
 import logging
@@ -48,9 +48,8 @@ class asyncdownloader(QObject):
 
     def cleaningstring(self,urlname):
         urlname = urlname.replace('/', '-')
-        if "." in urlname:
-            urlname = urlname.replace('.', '_')
-        urlname = urlname.replace(':', '_')
+        urlname = urlname.replace('.', ' ')
+        urlname = urlname.replace(':', ' ')
         return urlname
 
     async def audiodownload(self,path,audio,session):
@@ -62,21 +61,22 @@ class asyncdownloader(QObject):
             au_url = self.latestpattern.split(au_url)[0] + "/latest/"
         a=audio.find("a",{"href":True})
         name=a["href"].strip().split(":")[-1]
-        async with session.get(au_url, max_redirects=5) as au:
-            try:
-                if au.status == 200:
-                    data=await au.read()
-                    file = f"{path}{name}"
-                    with open(file, "wb") as aufile:
-                        aufile.write(data)
-                    self.log_message.emit(f"downloaded {name}")
-                    self.imglist.append(name)
-            except Exception as e:
-                self.log_message.emit(e)
-                self.i += 1
-                self.progress_updated.emit(self.i)
-                self.log_message("Continue?")
-                self.pause()
+        au=await session.get(au_url)
+        try:
+            if au. status_code == 200:
+                data=au.content
+                file = f"{path}{name}"
+                with open(file, "wb") as aufile:
+                    aufile.write(data)
+                self.log_message.emit(f"downloaded {name}")
+                self.imglist.append(name)
+        except Exception as e:
+            self.log_message.emit(str(e))
+            print(str(e))
+            self.i += 1
+            self.progress_updated.emit(self.i)
+            self.log_message.emit("Continue?")
+                #self.pause()
 
     async def imgdownload(self,path,image,session):
         """This is for downloading images.
@@ -92,24 +92,25 @@ class asyncdownloader(QObject):
 
         if bool(self.latestpattern.search(img_url)):
             img_url = self.latestpattern.split(img_url)[0] + "/latest/"
-        async with session.get(img_url, max_redirects=5) as img:
-            try:
-                if img.status == 200:
-                    name = image.get('data-image-key')
-                    if not(bool(self.nameimg.search(name))):
-                        name+=".webp"
-                    data=await img.read()
-                    file = f"{path}{name}"
-                    with open(file, "wb") as imagefile:
-                        imagefile.write(data)
-                    self.log_message.emit(f"downloaded {name}")
-                    self.imglist.append(name)
-            except Exception as e:
-                self.log_message.emit(e)
-                self.i += 1
-                self.progress_updated.emit(self.i)
-                self.log_message("Continue?")
-                self.pause()
+        img=await session.get(img_url)
+        try:
+            if img.status_code == 200:
+                name = image.get('data-image-key')
+                if not(bool(self.nameimg.search(name))):
+                    name+=".webp"
+                data=img.content
+                file = f"{path}{name}"
+                with open(file, "wb") as imagefile:
+                    imagefile.write(data)
+                self.log_message.emit(f"downloaded {name}")
+                self.imglist.append(name)
+        except Exception as e:
+            self.log_message.emit(str(e))
+            print(str(e))
+            self.i += 1
+            self.progress_updated.emit(self.i)
+            self.log_message.emit("Continue?")
+                #self.pause()
 
 
     async def download(self,url,session):
@@ -119,62 +120,64 @@ class asyncdownloader(QObject):
         From there it finally downloads the page in full"""
         await self.pause_event.wait()
         try:
-            async with session.get(URL(url,encoded=True),allow_redirects=True, max_redirects=20 , headers={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0"}) as res:
-                if (res.status==200):
-                    urlname = self.name(url)
-                    urlname = urlname.replace('/', '-')
-                    if "." in urlname:
-                        urlname=urlname.replace('.','_')
-                    urlname=urlname.replace(':','_')
+            res=await session.get(url)
+            if (res.status_code==200):
+                urlname = self.name(url)
+                urlname = urlname.replace('/', '-')
+                if "." in urlname:
+                    urlname=urlname.replace('.','_')
+                urlname=urlname.replace(':','_')
 
-                    html=await res.read()
-                    soup=BeautifulSoup(html,'html.parser')
-                    tasks=[self.imgdownload(self.path,img,session) for img in soup.find_all('img',{"data-image-key":True}) if self.imgfilter(img)]
-                    tasks2=[]
-                    for x in soup.find_all("audio",{"src":True}):
-                        a=x.find("a",{"href":True})
-                        name=a["href"].strip().split(":")[-1]
-                        if name not in self.imglist:
-                            tasks2.append(self.audiodownload(self.path,x,session))
-                    tasks=tasks+tasks2
-                    if tasks:
-                        await asyncio.gather(*tasks)
-                    videos= [i for i in soup.find_all('a',{"src":True,"class":re.compile("video")})]+[c for c in soup.find_all("video",{"src":True})]
-                    if videos:
-                        self.downvid.append(url)
+                html=res.content
+                soup=BeautifulSoup(html,'html.parser')
+                tasks=[self.imgdownload(self.path,img,session) for img in soup.find_all('img',{"data-image-key":True}) if self.imgfilter(img)]
+                tasks2=[]
+                for x in soup.find_all("audio",{"src":True}):
+                    a=x.find("a",{"href":True})
+                    name=a["href"].strip().split(":")[-1]
+                    if name not in self.imglist:
+                        tasks2.append(self.audiodownload(self.path,x,session))
+                tasks=tasks+tasks2
+                if tasks:
+                    await asyncio.gather(*tasks)
+                videos= [i for i in soup.find_all('a',{"src":True,"class":re.compile("video")})]+[c for c in soup.find_all("video",{"src":True})]
+                if videos:
+                    self.downvid.append(url)
                     #videos=[self.videodownload(session,vid) for vid in videos]
                     #await asyncio.gather(*videos)
-                    with open(f"{self.path}{urlname}.html", "w", encoding="utf-8") as htmlfile:
-                        htmlfile.write(soup.prettify())
-                    # Updates progress
-                    self.log_message.emit(f"Finished downloading {urlname}")
-                    self.progress_updated.emit(self.i)
-                    self.i += 1
-                else:
-                    res.raise_for_status()
+                with open(f"{self.path}{urlname}.html", "w", encoding="utf-8") as htmlfile:
+                    htmlfile.write(soup.prettify())
+                # Updates progress
+                self.log_message.emit(f"Finished downloading {urlname}")
+                self.progress_updated.emit(self.i)
+                self.i += 1
+            else:
+                res.raise_for_status()
         except Exception as e:
             self.log_message.emit(str(e))
+            print(str(e))
             self.i+=1
             self.progress_updated.emit(self.i)
-            self.log_message("Continue?")
-            self.pause()
+            self.log_message.emit("Continue?")
+            #self.pause()
 
     async def main(self):
         """ This is the main function. It times how long it takes and runs it all in one session."""
         start=time.time()
-        sem=asyncio.BoundedSemaphore(20)
+        sem=asyncio.BoundedSemaphore(9)
+        resolver = aiohttp.AsyncResolver(nameservers=["8.8.8.8", "8.8.4.4"])
+        connector = aiohttp.TCPConnector(resolver=resolver)
         async def sem_download(url,session):
             async with sem:
                 await self.download(url,session)
 
-        async with aiohttp.ClientSession(trust_env=True) as session:
+        async with AsyncSession(impersonate="firefox" ,max_clients=15,trust_env=True) as session:
             tasks=[]
             session.headers.update({"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0"})
             for url in self.downloadlist:
                 await self.pause_event.wait()
                 tasks.append(asyncio.create_task(sem_download(url,session)))
             await asyncio.gather(*tasks)
-
         end=time.time()
         print(end-start)
         print(self.downvid)

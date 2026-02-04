@@ -1,9 +1,8 @@
 import os
 import re
-from csv import DictReader, DictWriter
-from pydoc import ispath
+from csv import DictWriter
 from urllib.parse import urljoin
-
+import cloudscraper
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QMutex, QWaitCondition
 from bs4 import BeautifulSoup
 import requests
@@ -31,9 +30,19 @@ class linker(QObject):
         self.trackers=re.compile(r"(googletag|quantserve|scorecard|beacon|metrics|silversurfer|search-insight)")
         self.ispaused=False
         self.latestpattern=re.compile(r"\?cb.*\&")
-        self.session=requests.session()
+        self.cloud=requests.session()
+        self.session=cloudscraper.create_scraper(interpreter='js2py',
+                                                 delay=2,
+                                                 debug=True,
+                                                 browser={
+                                                     'browser': 'firefox',
+                                                     'platform': 'windows',
+                                                     'mobile': False
+                                                 },
+                                                 sess=self.cloud
+                                                 )
         #"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:146.0) Gecko/20100101 Firefox/146.0"
-        #self.session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:146.0) Gecko/20100101 Firefox/146.0"})
+        self.session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:146.0) Gecko/20100101 Firefox/146.0"})
         self.session.auth=('user','pass')
         self.path=path[0:len(path)-1]+'/'
         self.domain=domain
@@ -70,7 +79,7 @@ class linker(QObject):
                 reader=csv.DictWriter(fp,fieldnames=self.headers)
                 reader.writeheader()
 
-        try:
+        """try:
             with open(self.path+"js.csv","r",encoding='utf-8') as fp:
                 reader=csv.DictReader(fp)
                 for row in reader:
@@ -80,7 +89,7 @@ class linker(QObject):
         except FileNotFoundError as e:
             with open(self.path+"js.csv","w",encoding='utf-8') as fp:
                 reader=csv.DictWriter(fp,fieldnames=self.jsheaders)
-                reader.writeheader()
+                reader.writeheader()"""
 
 
     def paused(self,arg=None):
@@ -158,10 +167,14 @@ class linker(QObject):
         return soup
 
     def fixlinks(self,html):
-        a=html.find_all("a",{"href":re.compile(r"^\/wiki\/(?!((Special:)|Category:)).*$"),"title":True})
+        a=html.find_all("a",{"href":re.compile(r"^\/wiki\/(?!((Special:)|(Category:)|(File:))).*$"),"title":True})
         for i in a:
             self.check_pause()
             i["href"]=self.cleaningstring(self.ref(i["href"]))+".html"
+        b=html.find_all("a",{"href":re.compile(r"^\/wiki\/File:.*$")})
+        for i in b:
+            self.check_pause()
+            i["href"]=i["href"].split(':')[-1]
         a=html.find_all("video",{"src":True})+html.find_all("audio",{"src":True})
         for x in a:
             e=x.find("a",{"href":True})
@@ -230,12 +243,13 @@ class linker(QObject):
                     fp2.write(soup.prettify())
                     urls=open(self.path+"url.csv","w",encoding='utf-8')
                     update=csv.DictWriter(urls,fieldnames=['URL','Linked'])
+                    update.writeheader()
                     for row in self.linkedlist:
                         if row['URL']==x:
-                            row['Linked']=True
+                            row['Linked']="True"
+                            update.writerows(self.linkedlist)
                             break
-                    update.writeheader()
-                    update.writerows(self.linkedlist)
+                    urls.close()
                 self.i+=1
         self.session.close()
         self.finished.emit()

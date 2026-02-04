@@ -170,6 +170,46 @@ class mainwindow(QMainWindow, QDialog):
         if folder:
             self.path.setText(folder)
 
+    def submit(self):
+        url = str(self.url.text())
+        path = str(self.path.text())
+        patternscrap = re.compile(
+            r"^https:\/\/"
+            r"[a-zA-Z0-9\-]+\.fandom\.com\/"
+            r"wiki\/Local_Sitemap"
+            r"(?:\?namefrom=[^#]+"
+            r"|)$",
+            re.IGNORECASE
+        )
+        wikscrap = re.compile(
+            r"^https:\/\/"
+            r"[a-zA-Z0-9\-]+\.fandom\.com\/"
+            r"wiki\/.*$",
+            re.IGNORECASE
+        )
+        f1 = os.path.isdir(path)
+        f2 = bool(patternscrap.match(url))
+        f3 = bool(wikscrap.match(url))
+        if (not (url or path) and self.flag) or (not (f1) and (not (f2) and not f3)):
+            self.error.exec_()
+        elif self.flag and f1 and f3:
+            if not f2:
+                url = urljoin(url, "/wiki/Local_Sitemap")
+            self.flag = False
+            self.submitbutton.setEnabled(False)
+            path = rf"{path}"
+            if path[-1] != "/":
+                path += "/"
+            self.dirpath = path
+            self.collector(url)
+
+        elif not (f1) and self.flag:
+            self.errorpath.exec_()
+
+        elif not (f2) and self.flag:
+            print("F")
+            print(not (f2))
+            self.errorurl.exec_()
 
     def collector(self,url):
         """This helps in collecting all the link
@@ -270,11 +310,11 @@ class mainwindow(QMainWindow, QDialog):
     def net(self):
 
         self.Net_Thread=QThread()
-        self.graphs=Graphx(self.downloading_urls,self.dirpath)
+        self.graphs=Graphx(self.dirpath)
         self.graphs.moveToThread(self.Net_Thread)
         self.Net_Thread.started.connect(self.graphs.add_edges)
         self.graphs.dqsig.connect(self.endproc)
-
+        self.graphs.finished.connect(self.Net_Thread.exit)
 
         self.Net_Thread.start()
 
@@ -282,56 +322,12 @@ class mainwindow(QMainWindow, QDialog):
     def endproc(self,G):
 
         output_path = os.path.join(self.dirpath, 'network_map.html')
-        nt = Network('1000px', '1000px', bgcolor='#222222', font_color='white')
-        nt.from_nx(G)
-        nt.toggle_physics(True)
-        nt.write_html(output_path)
+        G.toggle_physics(True)
+        G.show_buttons(filter_=['physics'])
+        G.write_html(output_path)
         import webbrowser
         webbrowser.open(output_path)
 
-    def submit(self):
-        url = str(self.url.text())
-        path = str(self.path.text())
-        patternscrap = re.compile(
-            r"^https:\/\/"
-            r"[a-zA-Z0-9\-]+\.fandom\.com\/"
-            r"wiki\/Local_Sitemap"
-            r"(?:\?namefrom=[^#]+"
-            r"|)$",
-            re.IGNORECASE
-        )
-        wikscrap=re.compile(
-            r"^https:\/\/"
-            r"[a-zA-Z0-9\-]+\.fandom\.com\/"
-            r"wiki\/.*$",
-            re.IGNORECASE
-        )
-        f1 = os.path.isdir(path)
-        f2 = bool(patternscrap.match(url))
-        f3=bool(wikscrap.match(url))
-        if (not (url or path) and self.flag) or (not (f1) and (not (f2) and not f3)):
-            self.error.exec_()
-        elif self.flag and f1 and f3:
-            if not f2:
-                url=urljoin(url,"/wiki/Local_Sitemap")
-            self.flag = False
-            self.submitbutton.setEnabled(False)
-            path = rf"{path}"
-            if path[-1] != "/":
-                path += "/"
-            self.dirpath = path
-            self.collector(url)
-
-
-
-
-        elif not (f1) and self.flag:
-            self.errorpath.exec_()
-
-        elif not (f2) and self.flag:
-            print("F")
-            print(not (f2))
-            self.errorurl.exec_()
 
 
 def main():
