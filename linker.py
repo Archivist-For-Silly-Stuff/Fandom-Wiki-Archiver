@@ -234,7 +234,7 @@ class linker(QObject):
                 self.log.emit(f"Linking {name}")
                 self.prog.emit(self.i)
                 with open(self.path+name+'.html',"r",encoding="utf-8") as fp:
-                    soup=BeautifulSoup(fp,"html.parser")
+                    soup=BeautifulSoup(fp,"lxml")
                     soup=self.image(soup)
                     soup=self.css(soup)
                     soup=self.fixlinks(soup)

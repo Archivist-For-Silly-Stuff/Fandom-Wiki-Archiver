@@ -129,7 +129,7 @@ class asyncdownloader(QObject):
                 urlname=urlname.replace(':','_')
 
                 html=res.content
-                soup=BeautifulSoup(html,'html.parser')
+                soup=BeautifulSoup(html,'lxml')
                 tasks=[self.imgdownload(self.path,img,session) for img in soup.find_all('img',{"data-image-key":True}) if self.imgfilter(img)]
                 tasks2=[]
                 for x in soup.find_all("audio",{"src":True}):
