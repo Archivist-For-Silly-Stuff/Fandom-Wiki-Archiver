@@ -49,15 +49,11 @@ class linker(QObject):
         self.csslist=[]
         self.css_downloads=[]
         self.phplist=[]
-        self.jssrc=[]
-        self.jscounter=[]
         self.headers=['css','cssdownload','php']
         self.rows=[]
-        self.js=[]
         self.linkedlist=[]
         self.named=lambda y: '-'.join(y.strip().split('/')[4::])
         self.ref=lambda y: '-'.join(y.strip().split('/')[2::])
-        self.jsheaders=['jssrc','jscounter']
         self.mutex=QMutex()
         self.pausecon=QWaitCondition()
         with open(self.path+"url.csv",encoding='utf-8') as fp:
@@ -79,17 +75,6 @@ class linker(QObject):
                 reader=csv.DictWriter(fp,fieldnames=self.headers)
                 reader.writeheader()
 
-        """try:
-            with open(self.path+"js.csv","r",encoding='utf-8') as fp:
-                reader=csv.DictReader(fp)
-                for row in reader:
-                    self.jssrc.append(row['jssrc'])
-                    self.jscounter.append(row['jscounter'])
-
-        except FileNotFoundError as e:
-            with open(self.path+"js.csv","w",encoding='utf-8') as fp:
-                reader=csv.DictWriter(fp,fieldnames=self.jsheaders)
-                reader.writeheader()"""
 
 
     def paused(self,arg=None):
@@ -213,10 +198,10 @@ class linker(QObject):
 
     def cleaningstring(self,urlname):
         urlname = urlname.replace('/', '-')
-        if "." in urlname:
-            urlname = urlname.replace('.', '_')
-        urlname = urlname.replace(':', '_')
+        urlname = urlname.replace('.', '-')
+        urlname = urlname.replace(':', '-')
         return urlname
+
     @pyqtSlot()
     def link(self):
         #Helps continue from where you left off

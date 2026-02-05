@@ -9,7 +9,6 @@ from bs4 import BeautifulSoup
 import logging
 import requests
 import asyncio
-import aiohttp
 
 from video_downloader import Videos
 
@@ -48,8 +47,8 @@ class asyncdownloader(QObject):
 
     def cleaningstring(self,urlname):
         urlname = urlname.replace('/', '-')
-        urlname = urlname.replace('.', ' ')
-        urlname = urlname.replace(':', ' ')
+        urlname = urlname.replace('.', '-')
+        urlname = urlname.replace(':', '-')
         return urlname
 
     async def audiodownload(self,path,audio,session):
@@ -76,6 +75,7 @@ class asyncdownloader(QObject):
             self.i += 1
             self.progress_updated.emit(self.i)
             self.log_message.emit("Continue?")
+            self.pause()
                 #self.pause()
 
     async def imgdownload(self,path,image,session):
@@ -119,15 +119,11 @@ class asyncdownloader(QObject):
         all the images, videos if there are any and then downloads them all
         From there it finally downloads the page in full"""
         await self.pause_event.wait()
+        urlname=self.name(url)
+        urlname = self.cleaningstring(urlname)
         try:
             res=await session.get(url)
             if (res.status_code==200):
-                urlname = self.name(url)
-                urlname = urlname.replace('/', '-')
-                if "." in urlname:
-                    urlname=urlname.replace('.','_')
-                urlname=urlname.replace(':','_')
-
                 html=res.content
                 soup=BeautifulSoup(html,'lxml')
                 tasks=[self.imgdownload(self.path,img,session) for img in soup.find_all('img',{"data-image-key":True}) if self.imgfilter(img)]
@@ -156,6 +152,7 @@ class asyncdownloader(QObject):
         except Exception as e:
             self.log_message.emit(str(e))
             print(str(e))
+            self.log_message.emit(f"Failed to download {urlname}")
             self.i+=1
             self.progress_updated.emit(self.i)
             self.log_message.emit("Continue?")
@@ -164,16 +161,13 @@ class asyncdownloader(QObject):
     async def main(self):
         """ This is the main function. It times how long it takes and runs it all in one session."""
         start=time.time()
-        sem=asyncio.BoundedSemaphore(9)
-        resolver = aiohttp.AsyncResolver(nameservers=["8.8.8.8", "8.8.4.4"])
-        connector = aiohttp.TCPConnector(resolver=resolver)
+        sem=asyncio.BoundedSemaphore(15)
         async def sem_download(url,session):
             async with sem:
                 await self.download(url,session)
 
-        async with AsyncSession(impersonate="firefox" ,max_clients=15,trust_env=True) as session:
+        async with AsyncSession(impersonate="chrome" ,max_clients=15) as session:
             tasks=[]
-            session.headers.update({"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0"})
             for url in self.downloadlist:
                 await self.pause_event.wait()
                 tasks.append(asyncio.create_task(sem_download(url,session)))
