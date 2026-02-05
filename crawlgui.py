@@ -41,8 +41,6 @@ class crawler(QObject):
     # It also checks if you wanna make a graph
     def __init__(self, allowed_domain, path, urls=[], parent=None):
         QObject.__init__(self,parent)
-        print("p")
-        breakpoint()
         self.session = cloudscraper.create_scraper(interpreter='nodejs',
                                                    delay=2,
                                                    debug=True,
@@ -51,7 +49,6 @@ class crawler(QObject):
                                                        'platform': 'windows',
                                                        'mobile': False
                                                    })
-        print("p")
         self.visited_urls = []
         self.urls_to_visit = urls
         self.allowed_domain = allowed_domain
@@ -119,11 +116,9 @@ class crawler(QObject):
             self.log.emit(f"Collecting links from:{self.url}")
             sitemaplist.append(self.url)
             html = self.session.get(self.url)
-            soup = BeautifulSoup(html.text, "html.parser")
-            print(soup.prettify())
+            soup = BeautifulSoup(html.text, "lxml")
             a = soup.find_all('a', {"href": re.compile(r"^\/wiki\/(?!((Special:)|(Category:)|(User_blog:)|(File:))).*$")})
             # Uses URL join to connect with the main path
-            print(a)
             self.listourl = list(map(self.urls, a))
             self.urls_to_visit = self.urls_to_visit + list(filter(
                 lambda x: (bool(self.sitemap.match(x)) and (x not in self.urls_to_visit) and (x not in sitemaplist)),

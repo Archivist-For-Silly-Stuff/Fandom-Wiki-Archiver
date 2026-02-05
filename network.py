@@ -5,6 +5,8 @@ from PyQt5.QtCore import QObject, pyqtSignal
 from bs4 import BeautifulSoup
 import re
 import pyvis
+
+
 class Graphx(QObject):
     dqsig=pyqtSignal(object)
     finished=pyqtSignal()
@@ -19,7 +21,6 @@ class Graphx(QObject):
         self.size=[]
         self.label=[]
         self.edges=[]
-        print("p")
         self.cats=["Uncategorized"]
 
 
@@ -45,11 +46,11 @@ class Graphx(QObject):
 
     def add_edges(self):
         for i in self.names:
-            print(i)
             self.research(i)
             #self.G[i]['title']=i
         self.colors={i:self.random_color_generator() for i in (list(set(self.cats)))}
-        self.G.add_nodes(self.names,label=self.label,value=self.size)
+        self.cats=['#%02x%02x%02x' % self.colors[i] for i in self.cats]
+        self.G.add_nodes(self.names,label=self.label,value=self.size,color=self.cats)
         self.G.add_edges(self.edges)
 
         self.dqsig.emit(self.G)
