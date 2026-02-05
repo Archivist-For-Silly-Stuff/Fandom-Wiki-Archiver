@@ -131,7 +131,7 @@ class crawler(QObject):
         sleep(3)
 
         with open(self.path + "url.csv", "w") as fp:
-            # self.visited_urls=list(set(self.visited_urls))
+            self.visited_urls=list(set(self.visited_urls))
             writer = csv.DictWriter(fp, fieldnames=['URL', 'Linked'])
             writer.writeheader()
             rows = list({'URL': x, 'Linked': False} for x in self.visited_urls)
