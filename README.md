@@ -5,6 +5,9 @@ Note:This is still being worked on and supported.
 
 ~~As of now, robots.txt ***isn't considered*** so use this tool with care.~~ This has been worked through! However be sure to stay to wikia, other wiki's haven't been tested yet and it may lead to weird results!
 
+## Installation
+- A .exe is coming soon!
+
 ## Instructions for use:
 
 ~~From the terminal write this:~~
@@ -21,11 +24,13 @@ If you wish to use this there are also some prerequisite things you must downloa
 <ul>
   <li>bs4</li>
     <code>pip install beautifulsoup4</code>
-  <li>requests</li>
-    <code>pip install requests</code>
-  <li><a href="https://www.python.org/downloads/">Python 3 (For the CLI (Command Line Interface) to work)</a></li>
+  <li><a href="https://github.com/VeNoMouS/cloudscraper">cloudscraper</a></li>
+  <li><a href="https://www.python.org/downloads/">Python 3</a></li>
   <li>Pyvis (optional)-Only for network options</li>
     <code>pip install pyvis</code>
+  <li><a href="https://github.com/lexiforest/curl_cffi">Curl_cffi</a></li>
+  <li>pyqt5/li>
+    <code>pip install pyqt5</code>
 </ul>
 
 
@@ -40,4 +45,5 @@ So far I still need to:
   <li>Make this work for dynamic html (Javascript and such) - Will require automation</li>
   <li><s>Convert some processes from synchronous to asynchronous</s>></li>
   <li>Download videos too (WIP)-Still need to see how to about doing that.</li>
+  <li>Permanent solution for the cloudflare thing</li>
 </ul>
