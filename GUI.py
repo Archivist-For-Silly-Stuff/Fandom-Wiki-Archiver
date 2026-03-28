@@ -1,5 +1,7 @@
-from network import Graphx
+import pathlib
+import pickle
 
+from network import Graphx
 """
 We are using urljoin to help in joining together and autocorrecting the link from which 
 we need to get all the pages of a wiki
@@ -10,9 +12,9 @@ PyQt is used for the GUI because of its many widgets
 """
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QMessageBox, QFileDialog,
                              QDialog, QCheckBox)
-
+import pandas as pd
 import sys
-
+from linkerasync import linker as linkasync
 from qasync import asyncSlot
 import qasync
 """This helps download everything asynchronously"""
@@ -31,7 +33,7 @@ import asyncio
 
 """This is for the progress bar"""
 from progress import progress
-
+from crawlgui import csvfiles
 
 
 
@@ -45,6 +47,7 @@ class mainwindow(QMainWindow, QDialog):
         QMainWindow.__init__(self)
         super(mainwindow, self).__init__()
         #sets title and makes sure that the window still takes a response
+        self.link_thread:QThread =QThread()
 
         self.paused = False
         self.setWindowTitle("Archiver")
@@ -82,6 +85,10 @@ class mainwindow(QMainWindow, QDialog):
         self.errorurl.setIcon(QMessageBox.Critical)
 
         self.flag = True
+        self.csvurl:csvfiles|None=None
+        self.images:dict[str,list]={}
+
+        self.dirpath:pathlib.Path=pathlib.Path()
 
         self.initUI()
 
@@ -175,15 +182,17 @@ class mainwindow(QMainWindow, QDialog):
         path = str(self.path.text())
         patternscrap = re.compile(
             r"^https:\/\/"
-            r"[a-zA-Z0-9\-]+\.fandom\.com\/"
-            r"wiki\/Local_Sitemap"
-            r"(?:\?namefrom=[^#]+"
+            r"[a-zA-Z0-9\-]+\.((fandom\.com)|"
+            r"(miraheze\.org))\/"
+            r"wiki\/Special\:AllPages"
+            r"(?:\?from=[^#]+"
             r"|)$",
             re.IGNORECASE
         )
         wikscrap = re.compile(
             r"^https:\/\/"
-            r"[a-zA-Z0-9\-]+\.fandom\.com\/"
+            r"[a-zA-Z0-9\-]+\.((fandom\.com)|"
+            r"(miraheze\.org))\/"
             r"wiki\/.*$",
             re.IGNORECASE
         )
@@ -194,13 +203,11 @@ class mainwindow(QMainWindow, QDialog):
             self.error.exec_()
         elif self.flag and f1 and f3:
             if not f2:
-                url = urljoin(url, "/wiki/Local_Sitemap")
+                url = urljoin(url, "/wiki/Special:AllPages")
             self.flag = False
             self.submitbutton.setEnabled(False)
             path = rf"{path}"
-            if path[-1] != "/":
-                path += "/"
-            self.dirpath = path
+            self.dirpath = pathlib.Path(path)
             self.collector(url)
 
         elif not (f1) and self.flag:
@@ -217,83 +224,101 @@ class mainwindow(QMainWindow, QDialog):
         from the file site map to be used to download the whole wiki.
         This is more efficient than crawling like usual and a map of the whole wiki may be made at the end either way via the
         Network function"""
-        self.crawl_thread = QThread()
-        self.progress_bar1 = progress(2, "Crawler")
+        self.crawl_thread:QThread = QThread()
+        self.progress_bar1 = progress(2, self.dirpath,"Crawler")
         self.domain = url.split('/')[2]
         self.f = crawler(self.domain, self.dirpath, [url])
         self.f.moveToThread(self.crawl_thread)
-
-        self.crawl_thread.started.connect(lambda: QTimer.singleShot(0, self.f.downloadbar))
+        self.crawl_thread.started.connect(self.f.downloadbar)
         self.progress_bar1.show()
         self.f.log.connect(self.progress_bar1.log)
         self.f.prog.connect(self.progress_bar1.setprogress)
         self.f.sendurl.connect(self.urls)
         self.f.finish.connect(self.crawl_thread.exit)
-        self.f.finish.connect(self.progress_bar1.close)
+        self.f.finish.connect(self.progress_bar1.finish)
         self.pausebutton.clicked.connect(self.f.paused, type=Qt.DirectConnection)
         self.resumebutton.clicked.connect(self.f.resumed, type=Qt.DirectConnection)
         self.pausebutton.setEnabled(True)
         self.resumebutton.setEnabled(True)
-
+        #TODO:Check if the url.csv file is already here
         self.crawl_thread.start()
 
-    @asyncSlot(list)
-    async def urls(self, urls):
-        """Thsi helps to download all the url's. This is done so asynchronously allowing
+    @asyncSlot(csvfiles)
+    async def urls(self, urls:csvfiles):
+        print("F2")
+        """This helps to download all the url's. This is done so asynchronously allowing
         everything to be downloaded in a decent time."""
-        self.downloading_urls = urls
-        self.progress_bar2 = progress(len(urls), "Downloading")
-        self.downloader = downloader_async.asyncdownloader(self.dirpath, urls)
-        self.progress_bar2.show()
         try:
-            self.pausebutton.clicked.disconnect()
-            self.resumebutton.clicked.disconnect()
-        except:
-            pass
+            self.csvurl=urls
+            #print(self.csvurl)
+            tobedownloaded=self.csvurl.getsites() +self.csvurl.getmedia()
+            print(tobedownloaded)
+            #self.downloading_urls = self.jsonurls.fromkeys()
+            if tobedownloaded:
+                self.progress_bar2 = progress(len(tobedownloaded), self.dirpath,"Downloading")
+                self.downloader = downloader_async.asyncdownloader(self.dirpath, self.csvurl,self.domain)
+                self.progress_bar2.show()
+                try:
+                    self.pausebutton.clicked.disconnect()
+                    self.resumebutton.clicked.disconnect()
+                except:
+                    pass
 
-        self.pausebutton.clicked.connect(self.downloader.pause)
-        self.resumebutton.clicked.connect(self.downloader.resume)
+                self.pausebutton.clicked.connect(self.downloader.pause)
+                self.resumebutton.clicked.connect(self.downloader.resume)
 
-        asyncio.create_task(self.downloader.main())
+                self.downloader.log_message.connect(self.progress_bar2.log)
+                self.downloader.progress_updated.connect(self.progress_bar2.setprogress)
 
+                self.downloader.newrange.connect(self.progress_bar2.resetrange)
 
-        self.downloader.log_message.connect(self.progress_bar2.log)
-        self.downloader.progress_updated.connect(self.progress_bar2.setprogress)
-
-
-        self.downloader.finished.connect(self.linking)
-        self.downloader.finished.connect(self.progress_bar2.close)
+                self.downloader.sendcsv.connect(self.linking)
+                self.downloader.finished.connect(self.progress_bar2.finish)
 
 
-    def linking(self):
+                asyncio.create_task(self.downloader.main())
+            else:
+                self.linking(self.csvurl)
+
+
+        except Exception as e:
+            print(e)
+
+    @pyqtSlot(csvfiles)
+    def linking(self,csv:csvfiles):
         """We then link the html files with all the resources downloaded and the other files as well."""
-        self.link_thread = QThread()
-        self.progress_bar3 = progress(len(self.downloading_urls), "Linking")
-        self.link = linker.linker(self.dirpath, self.domain)
-        self.link.moveToThread(self.link_thread)
-        #This is a singleshot timer That makes the program only work once when this function is called.
-        self.link_thread.started.connect(lambda: QTimer.singleShot(0, self.link.link))
-        self.progress_bar3.show()
+        self.csvurl=csv
+        #self.link_thread = QThread()
+        linking=self.csvurl.getdownloadedsites()
+        if linking:
+            self.progress_bar3 = progress(len(linking), self.dirpath,"Linking")
+            self.link = linker.linker(self.dirpath,self.domain, self.csvurl)
+            self.link.moveToThread(self.link_thread)
+            #This is a singleshot timer That makes the program only work once when this function is called.
+            self.link_thread.started.connect(lambda: QTimer.singleShot(0, self.link.link))
+            self.progress_bar3.show()
 
-        self.link.log.connect(self.progress_bar3.log)
-        self.link.prog.connect(self.progress_bar3.setprogress)
-        self.link.finished.connect(self.link_thread.exit)
+            self.link.log.connect(self.progress_bar3.log)
+            self.link.prog.connect(self.progress_bar3.setprogress)
 
-        try:
-            self.pausebutton.clicked.disconnect()
-            self.resumebutton.clicked.disconnect()
-        except:
-            pass
-
-        self.pausebutton.clicked.connect(self.link.paused,type=Qt.DirectConnection)
-        self.resumebutton.clicked.connect(self.link.resumed,type=Qt.DirectConnection)
-
-        self.link.finished.connect(self.cleanup)
-        self.link.finished.connect(self.progress_bar3.close)
+            try:
+                self.pausebutton.clicked.disconnect()
+                self.resumebutton.clicked.disconnect()
+            except:
+                pass
+            self.pausebutton.clicked.connect(self.link.paused)
+            self.resumebutton.clicked.connect(self.link.resumed)
+            self.link.finished.connect(self.cleanup)
+            self.link.finished.connect(self.progress_bar3.finish)
+            self.link_thread.start()
 
 
+        else:
+            self.cleanup()
 
-        self.link_thread.start()
+
+
+
 
     @pyqtSlot()
     def cleanup(self):
