@@ -35,9 +35,9 @@ So far I still need to:
   <li><s>make a GUI (wip)</s> Done (WOOHOOO)</li> 
   <li>a .exe executable file</li>
   <s><li>Test the graphing feature</li></s>
-  <li>Extend this to other Fan Wikis</li>
-  <li>Download Weegeepedia</li>
-  <li>Make this work for dynamic html (Javascript and such) - Will require automation</li>
+  <li>Extend this to other Fan Wikis - WIP WOOHOOOOOO></li>
+  <li><s>Download Weegeepedia</s>></li>
+  <s><li>Make this work for dynamic html (Javascript and such) - Will require automation</li></s> - canned for now
   <li><s>Convert some processes from synchronous to asynchronous</s>></li>
   <li>Download videos too (WIP)-Still need to see how to about doing that.</li>
 </ul>
