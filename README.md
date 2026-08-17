@@ -29,7 +29,7 @@ If you wish to use this there are also some prerequisite things you must downloa
   <li>Pyvis (optional)-Only for network options</li>
     <code>pip install pyvis</code>
   <li><a href="https://github.com/lexiforest/curl_cffi">Curl_cffi</a></li>
-  <li>pyqt5/li>
+  <li>pyqt5</li>
     <code>pip install pyqt5</code>
 </ul>
 

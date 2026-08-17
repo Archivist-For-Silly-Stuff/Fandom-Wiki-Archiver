@@ -1,7 +1,9 @@
 import os
 import pathlib
 import re
+import traceback
 from csv import DictWriter
+from sys import orig_argv
 from urllib.parse import urljoin, urlsplit
 from crawlgui import csvfiles
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QMutex, QWaitCondition
@@ -32,14 +34,19 @@ class linker(QObject):
         QObject.__init__(self,parent)
         self.trackers=re.compile(r"(googletag|quantserve|scorecard|beacon|metrics|silversurfer|search-insight)")
         self.latestpattern=re.compile(r"\?cb.*\&")
-        self.static=re.compile(r"(https\:)?"
-                               r"\/\/static\..+\.net\/"
-                               r"([^\/]+)\/([^\/]+\/)?(([^\/]+)\/){2}"
-                               r"([^\/]+)(\/revision\/latest\/.*)?")
+        self.staticfull=re.compile(r"^((https\:)?\/\/static\..+\.net\/([^\/]+)\/)"
+                                   r"((images\/)|([^\/]+\/))?" 
+                                   r"((([^\/]+)\/){2})"
+                                   r"([^\/]+)" #file name
+                                   r"(|((\/revision\/latest\/).*|\/.*))$")
+        self.findimg=lambda url:self.staticfull.match(url).group(10)
 
+        self.wiki=domain.split(".")[1]
+        self.fandom:bool=self.wiki=="fandom"
+        self.miraheze:bool=self.wiki=="miraheze"
         self.ispaused=False
 
-        self.session: curl_cffi.Session = curl_cffi.Session(impersonate="chrome")
+        self.session: curl_cffi.Session = curl_cffi.Session(impersonate="firefox")
 
         self.path=pathlib.Path(path)
         self.domain=domain
@@ -112,61 +119,97 @@ class linker(QObject):
         self.i=1
 
         for x in self.links:
+            try:
+                self.check_pause()
 
-            self.check_pause()
+                name=x["name"]
+                self.log.emit(f"Linking {name}")
+                self.prog.emit(self.i)
+                pathname=self.path.joinpath(name)
+                #breakpoint()
+                with open(pathname,"r",encoding="utf-8") as fp:
+                    soup=BeautifulSoup(fp,"html.parser")
 
-            name=x["name"]
-            self.log.emit(f"Linking {name}")
-            self.prog.emit(self.i)
-            pathname=self.path.joinpath(name)
-            #breakpoint()
-            with open(pathname,"r",encoding="utf-8") as fp:
-                soup=BeautifulSoup(fp,"html.parser")
+                    soup=self.image(soup)
+                    soup=self.css(soup)
+                    soup=self.fixlinks(soup)
+                    soup=self.remove_trackers(soup)
 
-                soup=self.image(soup)
-                soup=self.css(soup)
-                soup=self.fixlinks(soup)
-                soup=self.remove_trackers(soup)
-
-            with open(pathname,"w",encoding="utf-8") as fp2:
-                fp2.write(soup.prettify())
-                self.csvurl.update_url_link(x["name"])
+                with open(pathname,"w",encoding="utf-8") as fp2:
+                    fp2.write(soup.prettify())
+                    self.csvurl.update_url_link(x["name"])
 
 
-            self.i+=1
+                self.i+=1
+            except Exception as e:
+                print(f"{str(e)}\n\n{traceback.format_exc()}")
 
         self.session.close()
         self.finished.emit()
 
     def image(self,soup):
-        a = ({image for image
-              in soup.find_all("img", {"data-image-key":True,"src":True})
-             if image['data-image-key']!=image['src']}
-             |{image for image
-               in soup.find_all("img", {"data-image-key":True,"data-src":True})
-               if image['data-image-key']!=image['data-src']})
+        if self.fandom:
+            a = ({image for image
+                  in soup.find_all("img", {"data-image-key":True,"src":True})
+                 if image['data-image-key']!=image['src']}
+                 |{image for image
+                   in soup.find_all("img", {"data-image-key":True,"data-src":True})
+                   if image['data-image-key']!=image['data-src']})
 
-        if a:
-            """
-            This is unlikely to be needed since everything in the list has by default a src and a data-src is already being checked for.
-            a1=[img for img in a if img.has_attr('src') and img['data-image-key']!=img['src']]
-            a2=[img for img in a if img.has_attr('data-src') and img['data-image-key']!=img['data-src']]
-            a=a1+a2"""
-            for img in list(a):
-                try:
-                    img["src"] = img["data-image-key"]
-                    if img.has_attr('data-src'):
-                        img['data-src']=img["data-image-key"]
-                        img["loading"]="eager"
-                        if "lazyload" in img["class"]:
-                            img["class"].remove("lazyload")
-                except Exception as e:
-                    self.log.emit(str(e))
-                    logging.info(f"{e}")
+            if a:
+                for img in list(a):
+                    try:
+                        img["src"] = img["data-image-key"]
+                        if img.has_attr('data-src'):
+                            img['data-src']=img["data-image-key"]
+                            img["loading"]="eager"
+                            if "lazyload" in img["class"]:
+                                img["class"].remove("lazyload")
+                    except Exception as e:
+                        self.log.emit(str(e))
+                        logging.info(f"{e}")
                 #self.side.login(e)
+        elif self.miraheze:
+            a = ({image for image
+                  in soup.find_all("img", {"src": True})
+                  if self.staticfull.search(image['src'])}
+                 | {image for image
+                    in soup.find_all("img", { "data-src": True})
+                    if self.staticfull.search(image['data-src'])})
+            print(a)
+
+            if a:
+                for img in list(a):
+                    try:
+                        if img.has_attr("data-src"):
+                            src=img.get("data-src")
+                            print(src)
+                        elif img.has_attr("src"):
+                            src=img.get("src")
+                            print(src)
+                        if not(src.startswith("https:")):
+                            src="https:"+src
+                        name=self.findimg(src)
+                        print(name)
+                        img["src"] = name
+                        if img.has_attr('data-src'):
+                            img['data-src'] = name
+
+                            img["loading"] = "eager"
+                            if "lazyload" in img["class"]:
+                                img["class"].remove("lazyload")
+                        if img.has_attr("srcset"):
+                            img["srcset"]=name
+                    except Exception as e:
+                        self.log.emit(str(e))
+                        logging.info(f"{e}")
+                        breakpoint()
+                # self.side.login(e)
+
         a=soup.find_all("audio",{"src":True})+soup.find_all("video",{"src":True})
         if a:
             for media in a:
+
                 aref=media.find("a",{"href":re.compile(r"./wiki/File:.+$")})
                 if aref:
                     name=aref.get("href").strip().split(":")[-1]
@@ -244,9 +287,9 @@ class linker(QObject):
         for i in b:
             self.check_pause()
             i["href"]=i["href"].split(':')[-1]
-        c=html.find_all("a",{"href":self.static})
+        c=html.find_all("a",{"href":self.staticfull})
         for link in c:
-            link["href"]=self.static.match(link["href"]).group(6)
+            link["href"]=self.findimg(link["href"])
         #AREN'T THEY THE SAME FUDGING METHOD????
         """a=html.find_all("video",{"src":True})+html.find_all("audio",{"src":True})
         for x in a:
