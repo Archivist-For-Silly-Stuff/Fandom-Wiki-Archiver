@@ -139,6 +139,7 @@ class crawler(QObject):
         self.resources={file for file in os.listdir(self.urlpath) if bool(fileregex.match(file))}
         self.urlpath=self.urlpath.joinpath(f"csv_{self.allowed_domain.split(".")[0]}.csv")
         print("F")
+        self.error=open(path.joinpath("error.txt"),"w",encoding="utf-8")
 
 
     def cleaningstring(self,urlname:str)->str:
@@ -205,7 +206,7 @@ class crawler(QObject):
         self.log.emit("Finished scraping sitemap")
         csvf=csvfiles(self.csvmediafile,self.csvfile)
         self.session.close()
-
+        self.error.close()
         self.sendurl.emit(csvf)
         self.finish.emit()
 
@@ -270,8 +271,9 @@ class crawler(QObject):
                 for vid in videos:
                     self.mediaclean(vid,"video")
             except Exception as e:
-                print(f"{str(e)}\n\n{traceback.format_exc()}")
-                breakpoint()
+                print(f"{str(e)}\n\n{traceback.format_exc()}",file=self.error)
+                self.log.emit(f"{str(e)}\n\n{traceback.format_exc()}")
+
             media=media+ list(set(filter(lambda url:(url not in filelist)
                                                 and (url not in media)
                                                 and bool(self.mediamap.match(url)),blist)))
@@ -297,8 +299,17 @@ class crawler(QObject):
             src = urljoin(f"https://{self.allowed_domain}", src)
             name=src.split("/")[-1]
         else:
-            name=self.findimg(src)
-            src=self.staticfull.sub(r"\1\5\7\10\13",src)
+            try:
+                print(f"{src}")
+                if self.staticfull.search(src):
+                    name=self.findimg(src)
+                    src=self.staticfull.sub(r"\1\5\7\10\13",src)
+                else:
+                    print(src,"Needs to be downloaded. Please if you see this, send it to me!")
+                    name:str=src.split("/")[-1]
+            except Exception as e:
+                print(f"{str(e)}\n\n{traceback.format_exc()}",file=self.error)
+                print(f"\n{src}\n",file=self.error)
         if self.fandom and mtype=="image":
             namere=name
             name = tag['data-image-key']
