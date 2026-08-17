@@ -25,7 +25,7 @@ logging.basicConfig(
     format='%(asctime)s %(levelname)s:%(message)s',
     level=logging.INFO)
 # Graphs
-
+import traceback
 """Takes the list of all media in a wiki and all sites as parameters.
         They are a list of dictionary objects (each dict is a record).
         For sites, the fields are
@@ -51,7 +51,7 @@ class csvfiles:
         return [row for row in self.sitescsv if row["downloaded"].lower()=="false"]
 
     def getdownloadedsites(self)->list[dict]:
-        return [row for row in self.sitescsv if row["linked"].lower()=="false"]
+        return [row for row in self.sitescsv if row["linked"].lower()=="false" and row["downloaded"].lower()=="true"]
 
     def update_url_download(self,urlname):
         for row in range(len(self.sitescsv)):
@@ -100,6 +100,9 @@ class crawler(QObject):
         self.visited_urls:list=[]
         self.urls_to_visit:list[str] = urls
         self.allowed_domain = allowed_domain
+        self.wiki=self.allowed_domain.split(".")[1].lower()
+        self.fandom:bool=self.wiki=="fandom"
+        self.miraheze:bool=self.wiki=="miraheze"
         self.patternscrap: re.Pattern[str] = re.compile(
             rf"^https://{self.allowed_domain}/wiki/"
             r"[^:]+$",
@@ -119,8 +122,13 @@ class crawler(QObject):
         self.latestpattern = re.compile(r"/latest(?:\/|\?cb).*$",
                                         re.IGNORECASE)
         self.static=re.compile(r"static\..+\.net",re.IGNORECASE)
+        self.staticfull=re.compile(r"^((https\:)?\/\/static\..+\.net\/([^\/]+)\/)"
+                                   r"((images\/)|([^\/]+\/))?" 
+                                   r"((([^\/]+)\/){2})"
+                                   r"([^\/]+)" #file name
+                                   r"(|((\/revision\/latest\/).*|\/.*))$")
         self.urls=lambda i:urljoin(rf"https://{self.allowed_domain}/wiki/",i['href'])
-
+        self.findimg=lambda url:self.staticfull.match(url).group(10)
         self.cleanlist:list=[]
         self.medialist:set=set()
         self.count:int=0
@@ -212,12 +220,9 @@ class crawler(QObject):
             self.log.emit(f"Collecting links from:{self.url}")
             sitemaplist.append(self.url)
             html = self.session.get(self.url)
-            print(html)
             soup = BeautifulSoup(html.text, "html.parser")
-            print(soup.prettify())
             b=soup.find_all('a',{"href":re.compile(r"^/wiki/Special:AllPages\??.*(from=.+)?.*$")})
             a = soup.find_all('a', {"href": re.compile(r"^\/wiki\/(?!((Special:)|(Category:)|(User_blog:)|(File:))).*$"),"class":False})
-            print(a)
             # Uses URL join to connect with the main path
             self.listourl = list(map(self.urls, a))
             blist:list=list(map(self.urls,b))
@@ -253,16 +258,20 @@ class crawler(QObject):
             html = self.session.get(self.url)
             soup = BeautifulSoup(html.text, "lxml")
             b=soup.find_all('a',{"href":re.compile(r"^/wiki/Special:ListFiles\??.*(offset=.+)?.*$")})
-            images=soup.find_all('img',{"data-image-key":True})
-            for img in images:
-                self.mediaclean(img,"image")
-            audio=soup.find_all("audio", {"src": True})
-            for au in audio:
-                self.mediaclean(au,"audio")
-            videos=soup.find_all("video",{"src":True})
-            for vid in videos:
-                self.mediaclean(vid,"video")
-            blist=map(self.urls,b)
+            blist = map(self.urls, b)
+            images=soup.find_all('img',{"src":True})
+            try:
+                for img in images:
+                    self.mediaclean(img,"image")
+                audio=soup.find_all("audio", {"src": True})
+                for au in audio:
+                    self.mediaclean(au,"audio")
+                videos=soup.find_all("video",{"src":True})
+                for vid in videos:
+                    self.mediaclean(vid,"video")
+            except Exception as e:
+                print(f"{str(e)}\n\n{traceback.format_exc()}")
+                breakpoint()
             media=media+ list(set(filter(lambda url:(url not in filelist)
                                                 and (url not in media)
                                                 and bool(self.mediamap.match(url)),blist)))
@@ -279,11 +288,22 @@ class crawler(QObject):
     def mediaclean(self,tag:bs4.Tag,mtype:str):
         if mtype not in {"image","audio","video"}:
             raise Exception(f"Unkown media {mtype}")
-        if mtype=="image":
+        src=tag.get("src")
+        if src and src.startswith("data:image"):
+            src = tag.get('data-src')
+        if not(src.startswith("https:")):
+            src=f"https:{src}"
+        if not (bool(self.static.search(src))):
+            src = urljoin(f"https://{self.allowed_domain}", src)
+            name=src.split("/")[-1]
+        else:
+            name=self.findimg(src)
+            src=self.staticfull.sub(r"\1\5\7\10\13",src)
+        if self.fandom and mtype=="image":
+            namere=name
             name = tag['data-image-key']
-        elif mtype=="audio" or mtype=="video":
-            a = tag.find("a", {"href": True})
-            name = a["href"].strip().split(":")[-1]
+            print(name==namere)
+
         if name not in self.media:
             modname = name
             mname = self.nameimg.match(name)
@@ -297,46 +317,8 @@ class crawler(QObject):
                     modname = self.medianame.match(name)
                     modname = modname.group(1) + f"({self.count})." + modname.group(2)
                 self.count += 1
-            src = tag.get('src')
-            if src.startswith("data:image"):
-                src=tag.get('data-src')
-            if not(bool(self.static.search(src))):
-                src=urljoin(f"https://{self.allowed_domain}",src)
-            if self.latestpattern.search(src):
-                src = self.latestpattern.split(src)[0] + "/latest/"
+
+            """if self.latestpattern.search(src):
+                src = self.latestpattern.split(src)[0] + "/latest/"""
             self.media[name] = [src,modname,"FALSE"]
 
-    """def images(self,img):
-        name = img['data-image-key']
-        if name not in self.media:
-            modname = name
-            if name.lower() in self.media:
-                modname = self.nameimg.search(name)
-                if not modname:
-                    modname = f"{name}({self.count}).webp"
-                else:
-                    modname = modname.group(1) + f"({self.count})." + modname.group(2)
-                self.count += 1
-            if modname not in self.resources:
-                src = img.get('src')
-                if src.startswith("data:image"):
-                    src=img.get('data-src')
-                self.media[name] = [src,modname,"False"]
-    def audio(self,au):
-        a = au.find("a", {"href": True})
-        name = a["href"].strip().split(":")[-1]
-        if name not in self.media:
-            modname = name
-            if name.lower() in self.images:
-                modname = self.nameimg.search(name)
-                if not modname:
-                    modname = f"{name}({self.count}).webp"
-                else:
-                    modname = modname.group(1) + f"({self.count})." + modname.group(2)
-                self.count += 1
-            if modname not in self.resources:
-                src = img.get('src')
-                if src.startswith("data:image"):
-                    src=img.get('data-src')
-                self.media[name] = [src,modname,"False"]
-"""

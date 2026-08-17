@@ -302,7 +302,7 @@ class linker(QObject):
                 None, os.fsync, fp2.fileno()
             )
         self.prog.emit(self.i)
-        self.linkedlist[x]["linked"] = True
+        #self.linkedlist[x]["linked"] = True
 
         """    
          Bye bye dumb code 

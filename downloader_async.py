@@ -272,7 +272,7 @@ class asyncdownloader(QObject):
                 print(f"Error downloading {name}: {str(e)}\n{traceback.format_exc()}\n Trying again",file=self.filepointer)
                 #self.log_message.emit("Continue?")
                 #self.pause()
-        self.log_message.emit(f"Failed to download {src}")
+                #self.log_message.emit(f"Failed to download {src}")
         self.i += 1
         self.progress_updated.emit(self.i)
 
