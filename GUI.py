@@ -47,6 +47,7 @@ class mainwindow(QMainWindow, QDialog):
         QMainWindow.__init__(self)
         super(mainwindow, self).__init__()
         #sets title and makes sure that the window still takes a response
+        self.graphs:Graphx = None
         self.link_thread:QThread =QThread()
 
         self.paused = False
@@ -295,7 +296,7 @@ class mainwindow(QMainWindow, QDialog):
             self.link = linker.linker(self.dirpath,self.domain, self.csvurl)
             self.link.moveToThread(self.link_thread)
             #This is a singleshot timer That makes the program only work once when this function is called.
-            self.link_thread.started.connect(lambda: QTimer.singleShot(0, self.link.link))
+            self.link_thread.started.connect(lambda: QTimer.singleShot(0, self.link.main))
             self.progress_bar3.show()
 
             self.link.log.connect(self.progress_bar3.log)
@@ -308,22 +309,22 @@ class mainwindow(QMainWindow, QDialog):
                 pass
             self.pausebutton.clicked.connect(self.link.paused)
             self.resumebutton.clicked.connect(self.link.resumed)
-            self.link.finished.connect(self.cleanup)
+            self.link.sendcsv.connect(self.cleanup)
             self.link.finished.connect(self.progress_bar3.finish)
             self.link_thread.start()
 
 
         else:
-            self.cleanup()
+            self.cleanup(self.csvurl)
 
 
 
 
 
-    @pyqtSlot()
-    def cleanup(self):
+    @pyqtSlot(csvfiles)
+    def cleanup(self,csv):
         """This re-enables anything that is required to be re-enabled and disables anything to be disabled"""
-
+        self.csvurl=csv
         self.flag = True
         self.submitbutton.setEnabled(True)
         if self.flagnet:
@@ -331,20 +332,25 @@ class mainwindow(QMainWindow, QDialog):
             self.net()
         self.pausebutton.setEnabled(False)
         self.resumebutton.setEnabled(False)
+        self.submitbutton.setEnabled(True)
 
     def net(self):
-
         self.Net_Thread=QThread()
+        self.graphdown=progress(self.csvurl.getlen(),self.dirpath,"Graph")
+        self.graphdown.show()
         self.graphs=Graphx(self.dirpath)
         self.graphs.moveToThread(self.Net_Thread)
-        self.Net_Thread.started.connect(self.graphs.add_edges)
+        self.Net_Thread.started.connect(lambda : QTimer.singleShot(0,self.graphs.add_edges))
         self.graphs.dqsig.connect(self.endproc)
-        self.graphs.finished.connect(self.Net_Thread.exit)
-
+        self.graphs.dqsig.connect(self.Net_Thread.exit)
+        self.graphs.log.connect(self.graphdown.log)
+        self.graphs.prog.connect(self.graphdown.setprogress)
+        self.graphs.res.connect(self.graphdown.resetrange)
+        self.graphs.finished.connect(self.graphdown.finish)
         self.Net_Thread.start()
 
     @pyqtSlot(object)
-    def endproc(self,G):
+    def endproc(self,G:Graphx):
 
         output_path = os.path.join(self.dirpath, 'network_map.html')
         G.toggle_physics(True)
@@ -352,6 +358,9 @@ class mainwindow(QMainWindow, QDialog):
         G.write_html(output_path)
         import webbrowser
         webbrowser.open(output_path)
+        self.pausebutton.setEnabled(False)
+        self.resumebutton.setEnabled(False)
+        self.submitbutton.setEnabled(True)
 
 
 
