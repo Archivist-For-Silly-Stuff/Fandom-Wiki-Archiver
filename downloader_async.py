@@ -156,8 +156,8 @@ class asyncdownloader(QObject):
             self.csvfile.save_media(self.path.joinpath(f"csv_{self.allowed_domain.split(".")[0]}_media.csv"))
             self.csvfile.save_urls(self.path.joinpath(f"csv_{self.allowed_domain.split(".")[0]}.csv"))
             self.filepointer.close()
-            self.sendcsv.emit(self.csvfile)
             self.finished.emit()
+            self.sendcsv.emit(self.csvfile)
 
 
     async def download(self, url: dict[str,str], session: curl_cffi.requests.Session):

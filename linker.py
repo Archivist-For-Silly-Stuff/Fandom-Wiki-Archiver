@@ -28,6 +28,7 @@ class linker(QObject):
     prog=pyqtSignal(int)
     finished=pyqtSignal()
     pause=pyqtSignal(int)
+    sendcsv=pyqtSignal(csvfiles)
     #Takes the path where all the html is saved and domain of the url
     def __init__(self,path,domain,csvurls:csvfiles,parent=None):
         """"""
@@ -113,6 +114,45 @@ class linker(QObject):
         self.mutex.unlock()
 
     @pyqtSlot()
+    def main(self):
+
+        #Helps continue from where you left off
+        #lists=os.listdir(self.path)
+        self.i=1
+        for x in self.links:
+            self.link(x)
+        self.csvurl.save_urls(self.path.joinpath(f"csv_{self.domain.split('.')[0]}.csv"))
+        self.session.close()
+        self.finished.emit()
+
+    @pyqtSlot()
+    def link(self,x):
+        try:
+            self.check_pause()
+
+            name = x["name"]
+            self.log.emit(f"Linking {name}")
+            self.prog.emit(self.i)
+            pathname = self.path.joinpath(name)
+            # breakpoint()
+            with open(pathname, "r", encoding="utf-8") as fp:
+                soup = BeautifulSoup(fp, "html.parser")
+
+                soup = self.image(soup)
+                soup = self.css(soup)
+                soup = self.fixlinks(soup)
+                soup = self.remove_trackers(soup)
+
+            with open(pathname, "w", encoding="utf-8") as fp2:
+                fp2.write(soup.prettify())
+
+            self.csvurl.update_url_link(name)
+
+            self.i += 1
+        except Exception as e:
+            print(f"{str(e)}\n\n{traceback.format_exc()}")
+
+    """@pyqtSlot()
     def link(self):
         #Helps continue from where you left off
         #lists=os.listdir(self.path)
@@ -145,7 +185,7 @@ class linker(QObject):
                 print(f"{str(e)}\n\n{traceback.format_exc()}")
 
         self.session.close()
-        self.finished.emit()
+        self.finished.emit()"""
 
     def image(self,soup):
         if self.fandom:

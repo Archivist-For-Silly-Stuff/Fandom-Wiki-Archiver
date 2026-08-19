@@ -81,6 +81,10 @@ class csvfiles:
             writer=csv.DictWriter(fp,fieldnames=["site","name","linked","downloaded"],lineterminator="\n")
             writer.writeheader()
             writer.writerows(self.sitescsv)
+    def getlen(self):
+        return len(self.sitescsv)
+    def getlenmedia(self):
+        return len(self.mediacsv)
 
 class crawler(QObject):
     log=pyqtSignal(str)
