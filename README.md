@@ -38,7 +38,7 @@ If you wish to use this there are also some prerequisite things you must downloa
 So far I still need to:
 <ul>
   <li><s>make a GUI (wip)</s> Done (WOOHOOO)</li> 
-  <li>a .exe executable file</li>
+  <li><s>a .exe executable file</s></li>
   <s><li>Test the graphing feature</li></s>
   <li><s>Extend this to other Fan Wikis - WIP WOOHOOOOOO></s>></li>
   <li><s>Download Weegeepedia</s>></li>
