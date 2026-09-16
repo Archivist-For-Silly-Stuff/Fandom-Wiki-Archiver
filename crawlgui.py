@@ -1,3 +1,4 @@
+import datetime
 import logging
 # Allows us to delete any copies of html
 import os
@@ -144,6 +145,7 @@ class crawler(QObject):
         self.urlpath=self.urlpath.joinpath(f"csv_{self.allowed_domain.split(".")[0]}.csv")
         print("F")
         self.error=open(path.joinpath("error.txt"),"w",encoding="utf-8")
+        self.formattime="%H:%M, %d  %B %Y"
 
 
     def cleaningstring(self,urlname:str)->str:
@@ -291,7 +293,26 @@ class crawler(QObject):
         writer.writerows(self.csvmediafile)
         fp.close()
 
-    def mediaclean(self,tag:bs4.Tag,mtype:str):
+    def table_clean(self,table:bs4.Tag,all:bool):
+        if all:
+            rows = [row for row in table.tbody.find_all("tr")]
+            for row in rows:
+                timestamp=""
+                top=row.find("td",{"class":re.compile(r"col_top")}).text.strip()
+                if top.lower()=="no":
+                    timestamp=row.find("td",{"class":re.compile(r"img_timestamp")}).text.strip()
+                    timestamp=datetime.datetime.strptime(timestamp,self.formattime)
+        else:
+            images=table.find_all('img',{"src":True})
+            for img in images:
+                self.mediaclean(img,"image")
+            media=table.find_all("video",{"src":True})+table.find_all("audio",{"src":True})
+            for med in media:
+                self.mediaclean(med,med.name)
+
+
+
+    def mediaclean(self,tag:bs4.Tag,mtype:str,time:str="")->None:
         if mtype not in {"image","audio","video"}:
             raise Exception(f"Unkown media {mtype}")
         src=tag.get("src")
@@ -336,4 +357,3 @@ class crawler(QObject):
             """if self.latestpattern.search(src):
                 src = self.latestpattern.split(src)[0] + "/latest/"""
             self.media[name] = [src,modname,"FALSE"]
-
