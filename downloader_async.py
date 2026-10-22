@@ -73,7 +73,8 @@ class asyncdownloader(QObject):
         #self.alock = asyncio.Lock()
         self.count=0
         self.retries = []
-        self.unlinkedmedia:list[dict]=self.csvfile.getmedia()
+
+        self.unlinkedmedia:list[dict[str,str]]=self.csvfile.getmedia()
         print(self.unlinkedmedia)
         self.unique_tags={}
         self.headers:dict={}
@@ -127,9 +128,11 @@ class asyncdownloader(QObject):
                 for url in self.urlslist:
                     await self.pause_event.wait()
                     tasks.append(asyncio.create_task(sem_download(url, session)))
+
                 for media in self.unlinkedmedia:
                     await self.pause_event.wait()
                     tasks.append(sem_media(media,session))
+
                 if tasks:
                     await asyncio.gather(*tasks)
             """while self.retries:
