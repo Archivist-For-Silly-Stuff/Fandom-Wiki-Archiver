@@ -14,7 +14,6 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QLineEdit, QPush
                              QDialog, QCheckBox)
 import pandas as pd
 import sys
-from linkerasync import linker as linkasync
 from qasync import asyncSlot
 import qasync
 """This helps download everything asynchronously"""
@@ -47,6 +46,8 @@ class mainwindow(QMainWindow, QDialog):
         QMainWindow.__init__(self)
         super(mainwindow, self).__init__()
         #sets title and makes sure that the window still takes a response
+        self.flagnet:bool = None
+        self.allf:bool=False
         self.graphs:Graphx = None
         self.link_thread:QThread =QThread()
 
@@ -62,6 +63,8 @@ class mainwindow(QMainWindow, QDialog):
 
         self.resumebutton = QPushButton("Resume", self)
 
+
+
         self.label = QLabel("Archive", self)
 
         self.labelurl = QLabel("URL", self)
@@ -72,6 +75,10 @@ class mainwindow(QMainWindow, QDialog):
 
         self.graphdis=QLabel("Graph",self)
         self.checkbox=QCheckBox(self)
+
+        self.history=QLabel("History",self)
+        self.checkboxh=QCheckBox(self)
+
 
         self.error = QMessageBox()
         self.error.setIcon(QMessageBox.Critical)
@@ -86,6 +93,7 @@ class mainwindow(QMainWindow, QDialog):
         self.errorurl.setIcon(QMessageBox.Critical)
 
         self.flag = True
+
         self.csvurl:csvfiles|None=None
         self.images:dict[str,list]={}
 
@@ -163,6 +171,12 @@ class mainwindow(QMainWindow, QDialog):
         self.checkbox.setGeometry(100,450,30,30)
         self.checkbox.stateChanged.connect(self.checkf)
 
+        self.history.setGeometry(180,390,100,50)
+        self.history.setFont(QFont("Times New Roman",12))
+        self.checkboxh.setEnabled(True)
+        self.checkboxh.setGeometry(180,450,30,30)
+        self.checkboxh.stateChanged.connect(self.histf)
+
 
     def checkf(self,f):
         """This helps check if we should make a network"""
@@ -171,14 +185,23 @@ class mainwindow(QMainWindow, QDialog):
         else:
             self.flagnet=False
 
+    def histf(self,f):
+        if f:
+            self.allf=True
+        else:
+            self.allf=False
 
     def folder(self):
         """This is the function which helps to get the folder and set the Text in the path text box"""
-        folder = QFileDialog.getExistingDirectory(self, "Open Directory", "c:\\")
+        dir="c:\\"
+        if self.path.text():
+            dir=self.path.text()
+        folder = QFileDialog.getExistingDirectory(self, "Open Directory", directory=dir)
         if folder:
             self.path.setText(folder)
 
     def submit(self):
+        print(self.allf)
         url = str(self.url.text())
         path = str(self.path.text())
         patternscrap = re.compile(
@@ -219,6 +242,14 @@ class mainwindow(QMainWindow, QDialog):
             print(not (f2))
             self.errorurl.exec_()
 
+    """def ob(self,typename:str,data:dict):
+        self.gthread:QThread=QThread()
+        val=1 if (typename=="crawler") else 2 if (typename=="downloader") else 3
+        self.prog=progress(val,self.dirpath,typename)
+        if (val==1):
+            self.domain=data["url"].split("/")[2]
+            self."""
+
     def collector(self,url):
         """This helps in collecting all the link
         It runs the crawler object in a thread which helps to take everything
@@ -228,7 +259,7 @@ class mainwindow(QMainWindow, QDialog):
         self.crawl_thread:QThread = QThread()
         self.progress_bar1 = progress(2, self.dirpath,"Crawler")
         self.domain = url.split('/')[2]
-        self.f = crawler(self.domain, self.dirpath, [url])
+        self.f = crawler(self.domain, self.dirpath,self.allf,[url])
         self.f.moveToThread(self.crawl_thread)
         self.crawl_thread.started.connect(self.f.downloadbar)
         self.progress_bar1.show()
@@ -293,7 +324,8 @@ class mainwindow(QMainWindow, QDialog):
         linking=self.csvurl.getdownloadedsites()
         if linking:
             self.progress_bar3 = progress(len(linking), self.dirpath,"Linking")
-            self.link = linker.linker(self.dirpath,self.domain, self.csvurl)
+            self.link = linker.linker()
+            self.link.prep_l(self.dirpath,self.domain, self.csvurl)
             self.link.moveToThread(self.link_thread)
             #This is a singleshot timer That makes the program only work once when this function is called.
             self.link_thread.started.connect(lambda: QTimer.singleShot(0, self.link.main))

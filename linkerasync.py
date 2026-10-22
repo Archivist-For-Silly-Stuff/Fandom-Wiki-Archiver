@@ -41,40 +41,30 @@ class linker(QObject):
 
         #"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:146.0) Gecko/20100101 Firefox/146.0"
         #self.path=path[0:len(path)-1]+'/'
+        self.path:pathlib.Path=pathlib.Path()
+        self.domain:str=""
         self.path=pathlib.Path(path)
         print(self.path)
-        breakpoint()
         self.domain:str=domain
         self.csslist:list=[]
         self.css_downloads:list=[]
         self.phplist:list=[]
         self.headers=['css','cssdownload','php']
-        #self.rows=[]
-        #self.linkedlist : pd.DataFrame =links
-        #self.named=lambda y: '-'.join(y.strip().split('/')[4::])
-        #self.ref=lambda y: '-'.join(y.strip().split('/')[2::])
+        self.images:dict[str,list]={}
         self.i = 1
         self.asymutex=asyncio.Event()
         self.csslock=asyncio.Lock()
-        """wikirestrict=f"{self.domain.split(".")[0]}"
-        head,tail=wikirestrict.split("-")
-        head=head.capitalize()
-        tail=tail.upper()
-        wikirestrict=head+"_"+tail+"_Wiki
-        restrict=["User","User_Blog","Category","Special","Category"]
-        restrict=map(lambda x:f"({x})",restrict)
-        restrict="|".join(restrict)+":"
-        print(rf"^\/wiki\/(!?(({restrict}))|(.*\?\=.*)).*$")"""
         #breakpoint()
         self.paturl=re.compile(rf"^\/wiki\/(?!(.*\:.*)|" #special/file
                                         "((.*\?.*\=.*)|" #Query
                                         "(.*\%3.*\%3.*))|" 
                                         "(.*((\#)|(\%27)).*)).*$",re.IGNORECASE)
 
+
         self.hashsub=re.compile(rf"^(https\:\/\/{self.domain}\/wiki\/.*)\#.*$")
-        self.images:dict[str,list]={}
 
 
+    def preplink(self,path:,domain):
 
 
 
