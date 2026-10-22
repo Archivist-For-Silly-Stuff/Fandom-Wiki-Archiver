@@ -12,7 +12,7 @@ import requests
 import logging
 import csv
 import cssbeautifier
-
+import typing
 import progress
 import curl_cffi
 from urllib.parse import urlparse
@@ -30,9 +30,10 @@ class linker(QObject):
     pause=pyqtSignal(int)
     sendcsv=pyqtSignal(csvfiles)
     #Takes the path where all the html is saved and domain of the url
-    def __init__(self,path,domain,csvurls:csvfiles,parent=None):
+    def __init__(self,parent=None):
         """"""
         QObject.__init__(self,parent)
+
         self.trackers=re.compile(r"(googletag|quantserve|scorecard|beacon|metrics|silversurfer|search-insight)")
         self.latestpattern=re.compile(r"\?cb.*\&")
         self.staticfull=re.compile(r"^((https\:)?\/\/static\..+\.net\/([^\/]+)\/)"
@@ -42,48 +43,73 @@ class linker(QObject):
                                    r"(|((\/revision\/latest\/).*|\/.*))$")
         self.findimg=lambda url:self.staticfull.match(url).group(10)
 
-        self.wiki=domain.split(".")[1]
-        self.fandom:bool=self.wiki=="fandom"
-        self.miraheze:bool=self.wiki=="miraheze"
-        self.ispaused=False
+        self.wiki:str=""
+        self.fandom:bool=0
+        self.miraheze:bool=0
+        self.ispaused:bool=False
 
-        self.session: curl_cffi.Session = curl_cffi.Session(impersonate="firefox")
+        self.session: curl_cffi.Session|None =None
 
-        self.path=pathlib.Path(path)
-        self.domain=domain
+        self.csslist:list=[]
+        self.css_downloads:list=[]
+        self.phplist:list=[]
 
-        self.csslist=[]
-        self.css_downloads=[]
-        self.phplist=[]
-        self.rows=[]
-        self.headers=['css','php']
+        self.rows:list=[]
+        self.headers:list[str]=['css','php']
         self.cssdict: dict = dict()
 
         self.urlfragmentremove=lambda url:(urlsplit(url)
                                            ._replace(fragment="")
                                            .geturl())
 
-        self.mutex=QMutex()
-        self.pausecon=QWaitCondition()
+        self.mutex:QMutex=QMutex()
+        self.pausecon:QWaitCondition=QWaitCondition()
 
-        self.base=f"https://{self.domain}/"
+        self.domain:str=""
+        self.path:pathlib.Path=pathlib.Path()
+
+        self.base:str="https://{}/"
+        self.sanitise = None
+        self.absolute = None
+
+        self.csvurl:csvfiles|None=None
+        self.links:list[dict] =[]
+        self.sites:dict={}
+        self.media:dict={}
+
+        self.i = 0
+
+
+    def prep_l(self,path:pathlib.Path,domain:str,csvurls:csvfiles):
+        self.csslist:list=[]
+        self.css_downloads:list=[]
+        self.phplist:list=[]
+
+        self.rows:list=[]
+        self.cssdict: dict = dict()
+
+        self.wiki=domain.split(".")[1]
+        self.fandom:bool=self.wiki=="fandom"
+        self.miraheze:bool=self.wiki=="miraheze"
+
+        self.session= curl_cffi.Session(impersonate="firefox")
+
+        self.domain=domain
+        self.base:str=f"https://{self.domain}/"
         self.absolute=lambda url:urljoin(self.base,url)
-
         self.sanitise=lambda url:self.urlfragmentremove(self.absolute(url))
 
-        self.csvurl=csvurls
-        self.links = self.csvurl.getdownloadedsites()
-        self.sites={row["site"]:row["name"] for row in self.links}
-        self.media={row["original name"]:row["name"] for row in self.csvurl.mediacsv}
+        self.csvurl:csvfiles=csvurls
+        self.links:list[dict] = self.csvurl.getdownloadedsites()
+        self.sites:dict={row["site"]:row["name"] for row in self.links}
+        self.media:dict={row["original name"]:row["name"] for row in self.csvurl.mediacsv}
 
-        self.urlpath=self.path.joinpath(f"csv_{self.domain.split(".")[0]}.csv")
+        self.path=pathlib.Path(path)
 
         try:
             with open(self.path.joinpath("css.csv"),"r",encoding='utf-8') as fp:
                 reader=csv.DictReader(fp)
-
                 for row in reader:
-                    #self.cssdict[row['css']]=row['php']
                     self.csslist.append(row['css'])
                     self.phplist.append(row['php'])
                     self.rows.append({'css':row['css'], 'pfp':row['php']})
@@ -92,7 +118,6 @@ class linker(QObject):
             with open(self.path.joinpath("css.csv"),"w",encoding='utf-8') as fp:
                 reader=csv.DictWriter(fp,fieldnames=self.headers)
                 reader.writeheader()
-
 
 
     def paused(self,arg=None):
@@ -126,7 +151,7 @@ class linker(QObject):
         self.finished.emit()
 
     @pyqtSlot()
-    def link(self,x):
+    def link(self,x:dict):
         try:
             self.check_pause()
 
@@ -187,7 +212,7 @@ class linker(QObject):
         self.session.close()
         self.finished.emit()"""
 
-    def image(self,soup):
+    def image(self,soup:BeautifulSoup)->BeautifulSoup:
         if self.fandom:
             a = ({image for image
                   in soup.find_all("img", {"data-image-key":True,"src":True})
@@ -262,7 +287,7 @@ class linker(QObject):
         return soup
 
     #Downloads and links css
-    def css(self,soup):
+    def css(self,soup:BeautifulSoup)->BeautifulSoup:
 
         b = soup.find_all("link", {"rel":"stylesheet","href":True})
 
@@ -311,7 +336,7 @@ class linker(QObject):
             return self.sites[url]
         return url
 
-    def fixlinks(self,html):
+    def fixlinks(self,html:BeautifulSoup)->BeautifulSoup:
         a=html.find_all("a",{"href":re.compile(r"^\/wiki\/(?!((Special\:)|(Category\:)|(File\:))).*$"),"title":True})
         for i in a:
             self.check_pause()
@@ -355,7 +380,7 @@ class linker(QObject):
 
 
     #Removes js tracking scripts and  any suspicious iframes
-    def remove_trackers(self,soup):
+    def remove_trackers(self,soup:BeautifulSoup)->BeautifulSoup:
         self.check_pause()
         scripts=[script.decompose() for script in soup.find_all("script")]
         print(soup.find_all("script"))
@@ -372,7 +397,7 @@ class linker(QObject):
             script["src"]="js_0.js"""
         return soup
 
-    def cleaningstring(self,urlname):
+    def cleaningstring(self,urlname:str)->str:
         urlname = urlname.replace('/', '-')
         urlname = urlname.replace('.', '_')
         urlname = urlname.replace(':', ' ')

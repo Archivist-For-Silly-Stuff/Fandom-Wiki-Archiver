@@ -8,6 +8,7 @@ import pathlib
 import csv
 from csv import DictReader
 from time import sleep
+from typing import AnyStr
 from urllib.parse import urljoin
 
 import bs4
@@ -54,38 +55,55 @@ class csvfiles:
     def getdownloadedsites(self)->list[dict]:
         return [row for row in self.sitescsv if row["linked"].lower()=="false" and row["downloaded"].lower()=="true"]
 
-    def update_url_download(self,urlname):
+    def update_url_download(self,urlname)->None:
         for row in range(len(self.sitescsv)):
             if urlname == self.sitescsv[row]["name"]:
                 self.sitescsv[row]["downloaded"] = "TRUE"
                 # print(row)
                 break
-    def update_url_link(self,urlname):
+
+    def update_url_link(self,urlname:str)->None:
         for row in range(len(self.sitescsv)):
             if urlname == self.sitescsv[row]["name"]:
                 self.sitescsv[row]["linked"] = "TRUE"
                 # print(row)
                 break
-    def update_media(self,media):
+
+    def update_media(self,media:str)->None:
         for row in range(len(self.mediacsv)):
             if media == self.mediacsv[row]["name"]:
                 self.mediacsv[row]["downloaded"] = "TRUE"
                 # print(row)
                 break
-    def save_media(self, path:pathlib.Path):
+
+    def save_media(self, path:pathlib.Path)->None:
         with open(path,"w",encoding="utf-8") as fp:
             writer=csv.DictWriter(fp,fieldnames=["original name","source","name","downloaded"],lineterminator="\n")
             writer.writeheader()
             writer.writerows(self.mediacsv)
-    def save_urls(self, path:pathlib.Path):
+
+    def save_urls(self, path:pathlib.Path)->None:
         with open(path,"w",encoding="utf-8") as fp:
             writer=csv.DictWriter(fp,fieldnames=["site","name","linked","downloaded"],lineterminator="\n")
             writer.writeheader()
             writer.writerows(self.sitescsv)
-    def getlen(self):
+
+    def save(self,path:pathlib.Path)->None:
+        self.save_media(path)
+        self.save_urls(path)
+
+    def getlen(self)->int:
         return len(self.sitescsv)
-    def getlenmedia(self):
+
+    def getlenmedia(self)->int:
         return len(self.mediacsv)
+
+    def __len__(self)->dict[str,int]:
+        return {
+            "sites":len(self.sitescsv),
+            "media":len(self.mediacsv)
+        }
+
 
 class crawler(QObject):
     log=pyqtSignal(str)
@@ -95,60 +113,116 @@ class crawler(QObject):
     pause=pyqtSignal(bool)
     # Keeps a count of url's visited, downloaded and what domains are allowed. Besides the path to be saved too.
     # It also checks if you wanna make a graph
-    def __init__(self, allowed_domain:str, path:pathlib.Path, urls:list=[], parent=None):
+    def __init__(self, allowed_domain:str, path:pathlib.Path,allf:bool, urls:list=[],  parent=None):
+        """
+        Allowed_domain[Deprecated]:For the allowed domain here.
+        path:For the path everything needs to get saved at
+        urls:Every url to be saved.
+        parent:dummy
+        """
+        print(allf)
         QObject.__init__(self,parent)
+        self.allfiles:bool=allf
+
         self.listourl:list = []
         self.csvfile:list[dict]|DictReader[str] =[]
         self.csvmediafile:list[dict]|DictReader[str]=[]
-        self.urlpath:pathlib.Path = path
-        self.session:curl_cffi.Session=curl_cffi.Session(impersonate="firefox")
+
+        self.urlpath:pathlib.Path = pathlib.Path()
+        self.session:curl_cffi.Session|None=None
+
         self.visited_urls:list=[]
         self.urls_to_visit:list[str] = urls
+
+        self.allowed_domain:str = ""
+        self.wiki:str=""
+        self.fandom:bool=0
+        self.miraheze:bool=0
+
+        self.patternscrap: re.Pattern[str]|None = None
+
+        self.ispaused:bool=False
+        self.mutex:QMutex=QMutex()
+        self.pausecon:QWaitCondition=QWaitCondition()
+
+
+        self.nameimg:re.Pattern[AnyStr] = re.compile(r"^(.+)\.(?:(jpg|jpeg|png|gif|svg|webp|ico))$",
+                             re.IGNORECASE)
+        self.medianame:re.Pattern[AnyStr] = re.compile(r"^(.+)\.([^.]+)$",
+                             re.IGNORECASE)
+        self.latestpattern:re.Pattern[AnyStr] = re.compile(r"/latest(?:\/|\?cb).*$",
+                                        re.IGNORECASE)
+        self.static:re.Pattern[AnyStr] = re.compile(r"static\..+\.net",re.IGNORECASE)
+        self.staticfull:re.Pattern[AnyStr] = re.compile(r"^((https\:)?\/\/static\..+\.net\/([^\/]+)\/)"
+                                                        r"((images\/)|([^\/]+\/))?" 
+                                                        r"((([^\/]+)\/){2})"
+                                                        r"([^\/]+)" #file name
+                                                        r"(|((\/revision\/latest\/).*|\/.*))$")
+
+        self.statictime:re.Pattern[AnyStr]=re.compile(rf"^((https\:)?\/\/static\..+\.net\/([^\/]+)\/)"
+                                                      rf"((images\/)|([^\/]+\/))?"
+                                                      rf"((([^\/]+)\/){2})"
+                                                      rf"([^\/]+)"
+                                                      rf"(|((\/revision)\/((latest\/)|(\d+)).*|\/.*))$") 
+
+        self.sitemap:re.Pattern[AnyStr]|None = None
+        self.mediamap:re.Pattern[AnyStr]|None = None
+
+        self.urls=None
+        self.findimg=lambda url:self.staticfull.match(url).group(10)
+
+        self.cleanlist:list=[]
+        self.medialist:set=set()
+        self.count:int=0
+
+        self.filepath:pathlib.Path=pathlib.Path()
+        self.media:dict[str,list[str]]|list=dict()
+
+        self.resources:set=set()
+
+        self.urlpath:pathlib.Path=pathlib.Path()
+        print("F")
+        self.error=open(path.joinpath("error.txt"),"w",encoding="utf-8")
+        self.formattime="%H:%M, %d  %B %Y"
+        self.prepc(allowed_domain,path,urls)
+
+    def prepc(self, allowed_domain:str, path:pathlib.Path, urls:list=[]):
+        self.urls_to_visit:list[str] = urls
+
+        self.urlpath:pathlib.Path = path
+        self.session=curl_cffi.Session(impersonate="firefox")
+
         self.allowed_domain = allowed_domain
         self.wiki=self.allowed_domain.split(".")[1].lower()
         self.fandom:bool=self.wiki=="fandom"
         self.miraheze:bool=self.wiki=="miraheze"
+
         self.patternscrap: re.Pattern[str] = re.compile(
             rf"^https://{self.allowed_domain}/wiki/"
             r"[^:]+$",
             re.IGNORECASE
         )
-        self.ispaused:bool=False
-        self.mutex:QMutex=QMutex()
-        self.pausecon:QWaitCondition=QWaitCondition()
-        self.sitemap = re.compile(rf"^https://{self.allowed_domain}/wiki/Special:AllPages\??.*(from=.+)?.*$",
-                             re.IGNORECASE)
-        self.mediamap = re.compile(rf"^https://{self.allowed_domain}/wiki/Special:ListFiles(?:\?offset=.+| )$",
-                             re.IGNORECASE)
-        self.nameimg = re.compile(r"^(.+)\.(?:(jpg|jpeg|png|gif|svg|webp|ico))$",
-                             re.IGNORECASE)
-        self.medianame=re.compile(r"^(.+)\.([^.]+)$",
-                             re.IGNORECASE)
-        self.latestpattern = re.compile(r"/latest(?:\/|\?cb).*$",
-                                        re.IGNORECASE)
-        self.static=re.compile(r"static\..+\.net",re.IGNORECASE)
-        self.staticfull=re.compile(r"^((https\:)?\/\/static\..+\.net\/([^\/]+)\/)"
-                                   r"((images\/)|([^\/]+\/))?" 
-                                   r"((([^\/]+)\/){2})"
-                                   r"([^\/]+)" #file name
-                                   r"(|((\/revision\/latest\/).*|\/.*))$")
+
+        self.sitemap:re.Pattern[AnyStr] = re.compile(rf"^https://"
+                                                     rf"{self.allowed_domain}"
+                                                     rf"/wiki/Special:AllPages"
+                                                     rf"\??.*(from=.+)?.*$",
+                                                     re.IGNORECASE)
+        self.mediamap:re.Pattern[AnyStr] = re.compile(rf"^https://{self.allowed_domain}"
+                                                      rf"/wiki/Special:ListFiles"
+                                                      rf"(?:\?offset=.+| )$",
+                                                        re.IGNORECASE)
+
         self.urls=lambda i:urljoin(rf"https://{self.allowed_domain}/wiki/",i['href'])
-        self.findimg=lambda url:self.staticfull.match(url).group(10)
-        self.cleanlist:list=[]
-        self.medialist:set=set()
-        self.count:int=0
-        #self.csvfile=[]
-        self.filepath:pathlib.Path=self.urlpath.joinpath(f"csv_{self.allowed_domain.split(".")[0]}_media.csv")
-        self.media:dict[str,list]|list=dict()
+
         fileregex=re.compile(r"^.+\.(?!(html)|(htm)).+$")
+        self.filepath:pathlib.Path=self.urlpath.joinpath(f"csv_{self.allowed_domain.split(".")[0]}_media.csv")
         self.resources={file for file in os.listdir(self.urlpath) if bool(fileregex.match(file))}
-        self.urlpath=self.urlpath.joinpath(f"csv_{self.allowed_domain.split(".")[0]}.csv")
-        print("F")
-        self.error=open(path.joinpath("error.txt"),"w",encoding="utf-8")
-        self.formattime="%H:%M, %d  %B %Y"
+        self.urlpath:pathlib.Path=self.urlpath.joinpath(f"csv_{self.allowed_domain.split(".")[0]}.csv")
 
 
-    def cleaningstring(self,urlname:str)->str:
+
+    def cleaningstringc(self,urlname:str)->str:
         urlname='-'.join(urlname.strip().split('/')[4::])
         #urlname = urlname.replace('/', '-')
         urlname = urlname.replace('.', '_')
@@ -188,29 +262,35 @@ class crawler(QObject):
         self.prog.emit(1)
         self.log.emit("Scraping sitemap")
         print(self.allowed_domain.split(".")[0])
+
         if not(os.path.isfile(self.urlpath)):
             self.collectsites()
+
         else:
             fp = open(self.urlpath, 'r', newline='\n', encoding="utf-8")
-
             self.csvfile=csv.DictReader(fp)
             self.csvfile = [row for row in self.csvfile]
             fp.close()
+
             if not self.csvfile:
                 self.collectsites()
 
         if not(os.path.isfile(self.filepath)):
             self.collectfiles()
+
         else:
             fp = open(self.filepath, 'r', newline='\n', encoding="utf-8")
             self.csvmediafile=csv.DictReader(fp)
             self.csvmediafile = [row for row in self.csvmediafile]
             fp.close()
+
             if not self.csvmediafile:
                 self.collectfiles()
+
         self.prog.emit(2)
         self.log.emit("Finished scraping sitemap")
         csvf=csvfiles(self.csvmediafile,self.csvfile)
+
         self.session.close()
         self.error.close()
         self.sendurl.emit(csvf)
@@ -242,7 +322,7 @@ class crawler(QObject):
                        , self.listourl))
 
         self.visited_urls = list(set(self.visited_urls))
-        self.csvfile=[{"site":site,"name":self.cleaningstring(site),"linked":"FALSE","downloaded":"FALSE"} for site in self.visited_urls]
+        self.csvfile:list[dict[str,str]]=[{"site":site,"name": self.cleaningstringc(site), "linked": "FALSE", "downloaded": "FALSE"} for site in self.visited_urls]
         sleep(3)
         fp=open(self.urlpath,'w',newline='\n',encoding="utf-8")
         writer=csv.DictWriter(fp,fieldnames=["site","name","linked","downloaded"],lineterminator="\n")
@@ -254,7 +334,7 @@ class crawler(QObject):
     def collectfiles(self):
         #self.maketable()
         #?limit=500&user=&ilshowall=1
-        media:list=[urljoin(rf"https://{self.allowed_domain}/wiki/","/wiki/Special:ListFiles?limit=500")]
+        media:list=[urljoin(rf"https://{self.allowed_domain}/wiki/",f"/wiki/Special:ListFiles?limit=500&ilshowall={int(self.allfiles)}")]
         filelist:list = [media[0]]
 
         while media:
@@ -266,8 +346,9 @@ class crawler(QObject):
             soup = BeautifulSoup(html.text, "lxml")
             b=soup.find_all('a',{"href":re.compile(r"^/wiki/Special:ListFiles\??.*(offset=.+)?.*$")})
             blist = map(self.urls, b)
-            images=soup.find_all('img',{"src":True})
             try:
+                """
+                images=soup.find_all('img',{"src":True})
                 for img in images:
                     self.mediaclean(img,"image")
                 audio=soup.find_all("audio", {"src": True})
@@ -275,7 +356,8 @@ class crawler(QObject):
                     self.mediaclean(au,"audio")
                 videos=soup.find_all("video",{"src":True})
                 for vid in videos:
-                    self.mediaclean(vid,"video")
+                    self.mediaclean(vid,"video")"""
+                self.table_clean(soup.table,self.allfiles)
             except Exception as e:
                 print(f"{str(e)}\n\n{traceback.format_exc()}",file=self.error)
                 self.log.emit(f"{str(e)}\n\n{traceback.format_exc()}")
@@ -285,7 +367,7 @@ class crawler(QObject):
                                                 and bool(self.mediamap.match(url)),blist)))
             filelist=filelist + media
         #print(self.media)
-        self.csvmediafile=[{"original name":key,"source":item[0],"name":item[1],"downloaded":item[2]} for (key,item) in self.media.items()]
+        self.csvmediafile:list[dict[str,str]]=[{"original name":key,"source":item[0],"name":item[1],"downloaded":item[2]} for (key,item) in self.media.items()]
         sleep(3)
         fp=open(self.filepath,'w',newline='\n',encoding="utf-8")
         writer=csv.DictWriter(fp,fieldnames=["original name","source","name","downloaded"],lineterminator="\n")
@@ -293,15 +375,35 @@ class crawler(QObject):
         writer.writerows(self.csvmediafile)
         fp.close()
 
-    def table_clean(self,table:bs4.Tag,all:bool):
-        if all:
+    def table_clean(self,table:bs4.Tag,allf:bool):
+        """It cleans the table row by row. Could probably get done more efficiently."""
+        if allf:
             rows = [row for row in table.tbody.find_all("tr")]
             for row in rows:
                 timestamp=""
                 top=row.find("td",{"class":re.compile(r"col_top")}).text.strip()
+                file = row.find("td", {"class": re.compile(r"col_thumb")})
+                img=file.find("img")
+                vid=file.find("video")
+                au=file.find("audio")
+                if img:
+                    media=img
+                elif vid:
+                    media=vid
+                elif au:
+                    media=au
+                else:
+                    print(f"{file} is causing problems here!",file=self.error)
+                    continue
+                name=media.name if media.name!="img" else "image"
                 if top.lower()=="no":
                     timestamp=row.find("td",{"class":re.compile(r"img_timestamp")}).text.strip()
                     timestamp=datetime.datetime.strptime(timestamp,self.formattime)
+                    timestr:str=timestamp.strftime("_%Y_%m_%d_%H_%M_%S")
+                    self.mediaclean(media,name,timestr)
+                else:
+                    self.mediaclean(media,name)
+
         else:
             images=table.find_all('img',{"src":True})
             for img in images:
@@ -315,7 +417,8 @@ class crawler(QObject):
     def mediaclean(self,tag:bs4.Tag,mtype:str,time:str="")->None:
         if mtype not in {"image","audio","video"}:
             raise Exception(f"Unkown media {mtype}")
-        src=tag.get("src")
+        src:str=tag.get("src")
+        name:str=""
         if src and src.startswith("data:image"):
             src = tag.get('data-src')
         if not(src.startswith("https:")):
@@ -337,7 +440,12 @@ class crawler(QObject):
                 print(f"\n{src}\n",file=self.error)
         if self.fandom and mtype=="image":
             namere=name
-            name = tag['data-image-key']
+            x=tag.get('data-image-key')
+            if x:
+                name=x
+            else:
+                print(tag)
+                breakpoint()
             print(name==namere)
 
         if name not in self.media:
@@ -346,14 +454,33 @@ class crawler(QObject):
             if mtype=="image" and not bool(mname):
                 modname = f"{name}({self.count}).webp"
             if name.lower() in self.media:
+                rename:str|int=self.count
                 if mtype=="image":
                     mname=self.nameimg.match(modname)
-                    modname = mname.group(1) + f"({self.count})." + mname.group(2)
+                    modname = mname.group(1) + f"({rename})." + mname.group(2)
                 elif mtype=="audio" or mtype=="video":
                     modname = self.medianame.match(name)
-                    modname = modname.group(1) + f"({self.count})." + modname.group(2)
+                    modname = modname.group(1) + f"({rename})." + modname.group(2)
                 self.count += 1
+            self.media[name] = [src,modname,"FALSE"]
+
+        if name in self.media:
+            if time:
+                rename=time
+                modname = name
+                mname = self.nameimg.match(name)
+                if mtype == "image" and not bool(mname):
+                    modname = f"{name}({self.count}).webp"
+                if mtype=="image":
+                    mname=self.nameimg.match(modname)
+                    modname = mname.group(1) + f"({rename})." + mname.group(2)
+                elif mtype=="audio" or mtype=="video":
+                    modname = self.medianame.match(name)
+                    modname = modname.group(1) + f"({rename})." + modname.group(2)
+                self.media[modname]=[src,modname,"FALSE"]
+
+
+
 
             """if self.latestpattern.search(src):
                 src = self.latestpattern.split(src)[0] + "/latest/"""
-            self.media[name] = [src,modname,"FALSE"]
