@@ -358,10 +358,10 @@ class mainwindow(QMainWindow, QDialog):
         """This re-enables anything that is required to be re-enabled and disables anything to be disabled"""
         self.csvurl=csv
         self.flag = True
-        self.submitbutton.setEnabled(True)
         if self.flagnet:
             print("h")
             self.net()
+        print("d")
         self.pausebutton.setEnabled(False)
         self.resumebutton.setEnabled(False)
         self.submitbutton.setEnabled(True)
